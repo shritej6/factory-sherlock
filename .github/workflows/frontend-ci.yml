@@ -1,0 +1,103 @@
+# Frontend continuous integration.
+#
+# The frontend is being built concurrently with the rest of the repository.
+# This workflow only triggers on changes under frontend/ (see the paths filter)
+# and every build step additionally checks that frontend/package.json exists,
+# so the job passes as a no-op on a checkout that has no frontend yet.
+# It assumes the package.json scripts lint, format:check, typecheck, test, and
+# build exist, and that pnpm-lock.yaml is committed (installs are always frozen).
+name: Frontend CI
+
+on:
+  push:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Lint, type check, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Detect frontend package
+        id: detect
+        working-directory: ${{ github.workspace }}
+        run: |
+          if [ -f frontend/package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "frontend/package.json not found; skipping frontend checks."
+          fi
+
+      - name: Install pnpm
+        if: steps.detect.outputs.present == 'true'
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+        with:
+          # No "version" input: pnpm/action-setup reads the pnpm version from
+          # the "packageManager" field of frontend/package.json.
+          package_json_file: frontend/package.json
+          run_install: false
+
+      - name: Set up Node 22
+        if: steps.detect.outputs.present == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Resolve pnpm store path
+        if: steps.detect.outputs.present == 'true'
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        if: steps.detect.outputs.present == 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-
+
+      - name: Install dependencies
+        if: steps.detect.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        if: steps.detect.outputs.present == 'true'
+        run: pnpm lint
+
+      - name: Format check
+        if: steps.detect.outputs.present == 'true'
+        run: pnpm format:check
+
+      - name: Type check
+        if: steps.detect.outputs.present == 'true'
+        run: pnpm typecheck
+
+      - name: Test
+        if: steps.detect.outputs.present == 'true'
+        run: pnpm test
+
+      - name: Build
+        if: steps.detect.outputs.present == 'true'
+        run: pnpm build

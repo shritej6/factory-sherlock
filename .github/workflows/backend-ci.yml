@@ -1,0 +1,131 @@
+# Backend continuous integration.
+#
+# Runs lint, formatting, type checking, migrations, and the full pytest suite
+# (including tests marked "integration") against a throwaway MySQL 8.4 service
+# container. The root password below is a fixed value for the disposable CI
+# database only; it is never used anywhere else.
+name: Backend CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MYSQL_ROOT_PASSWORD: ci-root-password
+  MYSQL_DATABASE: factory_sherlock
+  MYSQL_USER: sherlock_app
+  MYSQL_PASSWORD: ci-app-password
+
+jobs:
+  backend:
+    name: Lint, type check, migrate, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          # Service definitions cannot read the workflow env context, so the root
+          # password is repeated here. Keep it identical to env.MYSQL_ROOT_PASSWORD.
+          MYSQL_ROOT_PASSWORD: ci-root-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pci-root-password"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          # Pinned so CI resolves the lockfile with the same uv as the
+          # development machine (setup-uv "version" input, exact release).
+          version: "0.10.4"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        # Only the dev group: the docs group pulls in Playwright, which CI never uses.
+        run: uv sync --locked --group dev
+
+      - name: Ensure a MySQL client is available
+        run: |
+          if ! command -v mysql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y mysql-client
+          fi
+          mysql --version
+
+      - name: Create .env for CI from .env.example
+        working-directory: ${{ github.workspace }}
+        run: |
+          jwt_secret="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          cp .env.example .env
+          sed -i "s|^MYSQL_HOST=.*|MYSQL_HOST=127.0.0.1|" .env
+          sed -i "s|^MYSQL_PORT=.*|MYSQL_PORT=3306|" .env
+          sed -i "s|^MYSQL_DATABASE=.*|MYSQL_DATABASE=${MYSQL_DATABASE}|" .env
+          sed -i "s|^MYSQL_USER=.*|MYSQL_USER=${MYSQL_USER}|" .env
+          sed -i "s|^MYSQL_PASSWORD=.*|MYSQL_PASSWORD=${MYSQL_PASSWORD}|" .env
+          sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}|" .env
+          sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=${jwt_secret}|" .env
+          sed -i "s|^SEED_DEMO_PASSWORD=.*|SEED_DEMO_PASSWORD=ci-demo-password|" .env
+          sed -i "s|^APP_ENV=.*|APP_ENV=test|" .env
+          # Print the non-secret keys so the job log shows what the backend will read.
+          grep -E '^(MYSQL_HOST|MYSQL_PORT|MYSQL_DATABASE|MYSQL_USER|APP_ENV)=' .env
+
+      - name: Create databases and application user
+        working-directory: ${{ github.workspace }}
+        env:
+          MYSQL_ROOT_ARGS: "-uroot -p${{ env.MYSQL_ROOT_PASSWORD }} -h127.0.0.1 -P3306 --protocol=tcp"
+        run: bash scripts/setup/init_databases.sh
+
+      - name: Apply migrations to the test database
+        run: uv run alembic upgrade head
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Mypy
+        # Strict typing is being tightened module by module, but mypy is a
+        # blocking check: any error fails the job.
+        run: uv run mypy app
+
+      - name: Pytest with coverage (unit, API, and integration)
+        run: >-
+          uv run pytest
+          --cov=app
+          --cov-report=term-missing
+          --cov-report=xml:coverage.xml
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          if-no-files-found: warn
+          retention-days: 14

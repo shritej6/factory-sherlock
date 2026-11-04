@@ -1,0 +1,36 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+*.tsbuildinfo
+frontend/dist/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
+
+# Local MySQL instance managed by scripts/development/local_mysql.sh
+.local/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+*.swp

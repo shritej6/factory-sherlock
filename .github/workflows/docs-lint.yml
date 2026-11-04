@@ -1,0 +1,96 @@
+# Documentation checks.
+#
+# The project writing standard forbids em dashes (U+2014), en dashes (U+2013),
+# and emoji in Markdown. The first job scans every .md file and fails when any
+# are found. The same scan is available locally as "make check-docs".
+#
+# The second job renders Mermaid diagrams under docs/media/diagrams with
+# mermaid-cli to catch syntax errors. It is allowed to fail because mermaid-cli
+# depends on a headless Chromium download that is not always available on the
+# runner.
+name: Docs Lint
+
+on:
+  push:
+    paths:
+      - "**/*.md"
+      - "docs/**"
+      - ".github/workflows/docs-lint.yml"
+  pull_request:
+    paths:
+      - "**/*.md"
+      - "docs/**"
+      - ".github/workflows/docs-lint.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  forbidden-characters:
+    name: Em dashes, en dashes, and emoji in Markdown
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Scan Markdown files
+        run: |
+          set -euo pipefail
+          matches="$(
+            find . -type f -name '*.md' \
+              -not -path '*/node_modules/*' \
+              -not -path '*/.venv/*' \
+              -not -path './.git/*' \
+              -not -path './.local/*' \
+              -print0 \
+            | xargs -0 perl -CSD -ne '
+                print "$ARGV:$.: $_"
+                  if /[\x{2013}\x{2014}]|[\x{1F000}-\x{1FAFF}]|[\x{2600}-\x{27BF}]|[\x{2B00}-\x{2BFF}]|\x{FE0F}/;
+                close ARGV if eof;
+              '
+          )"
+          if [ -n "${matches}" ]; then
+            echo "Forbidden characters found (em dash, en dash, or emoji):"
+            printf '%s\n' "${matches}"
+            exit 1
+          fi
+          echo "No forbidden characters found in Markdown files."
+
+  mermaid-syntax:
+    name: Mermaid diagram syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Render each .mmd file with mermaid-cli
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(docs/media/diagrams/*.mmd)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No .mmd files under docs/media/diagrams; nothing to check."
+            exit 0
+          fi
+          printf '%s\n' '{"args": ["--no-sandbox", "--disable-setuid-sandbox"]}' > "${RUNNER_TEMP}/puppeteer.json"
+          mkdir -p "${RUNNER_TEMP}/mermaid-out"
+          status=0
+          for file in "${files[@]}"; do
+            name="$(basename "${file}" .mmd)"
+            if npx --yes @mermaid-js/mermaid-cli@11.17.1 -p "${RUNNER_TEMP}/puppeteer.json" \
+                -i "${file}" -o "${RUNNER_TEMP}/mermaid-out/${name}.svg"; then
+              echo "ok: ${file}"
+            else
+              echo "failed: ${file}"
+              status=1
+            fi
+          done
+          exit "${status}"
