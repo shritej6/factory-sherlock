@@ -85,7 +85,9 @@ def main() -> int:
         page.wait_for_load_state("networkidle")
         first_case = page.locator("a[href^='/investigations/']").first
         if first_case.count() == 0:
-            print("no investigation found; open one through the UI or the API first", file=sys.stderr)
+            print(
+                "no investigation found; open one through the UI or the API first", file=sys.stderr
+            )
             browser.close()
             return 1
         first_case.click()

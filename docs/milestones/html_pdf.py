@@ -39,7 +39,10 @@ h2 {{
   font-size: 13.5pt; color: {NAVY}; margin: 18pt 0 6pt 0; padding-bottom: 3pt;
   border-bottom: 0.75pt solid {RULE}; break-after: avoid; page-break-after: avoid;
 }}
-h3 {{ font-size: 11.5pt; color: {NAVY}; margin: 12pt 0 4pt 0; break-after: avoid; page-break-after: avoid; }}
+h3 {{
+  font-size: 11.5pt; color: {NAVY}; margin: 12pt 0 4pt 0;
+  break-after: avoid; page-break-after: avoid;
+}}
 p {{ margin: 0 0 7pt 0; text-align: left; orphans: 3; widows: 3; }}
 ul, ol {{ margin: 0 0 7pt 0; padding-left: 18pt; }}
 li {{ margin: 0 0 3pt 0; }}
@@ -60,11 +63,16 @@ pre {{
   background: {ZEBRA}; border: 0.5pt solid {RULE}; padding: 6pt 8pt; margin: 4pt 0 10pt 0;
   white-space: pre-wrap; word-wrap: break-word;
 }}
-figure {{ margin: 6pt 0 12pt 0; text-align: center; break-inside: avoid; page-break-inside: avoid; }}
+figure {{
+  margin: 6pt 0 12pt 0; text-align: center; break-inside: avoid; page-break-inside: avoid;
+}}
 figure img {{ max-width: 100%; height: auto; }}
 figcaption {{ font-size: 9pt; color: #4A5568; margin-top: 4pt; }}
 figure.shot img {{ max-width: 80%; border: 0.5pt solid {RULE}; }}
-p.caption {{ font-weight: 600; font-size: 9.5pt; color: {NAVY}; margin: 8pt 0 3pt 0; break-after: avoid; page-break-after: avoid; }}
+p.caption {{
+  font-weight: 600; font-size: 9.5pt; color: {NAVY}; margin: 8pt 0 3pt 0;
+  break-after: avoid; page-break-after: avoid;
+}}
 p.lead {{ margin-bottom: 4pt; break-after: avoid; page-break-after: avoid; }}
 .note {{ font-style: italic; color: #4A5568; }}
 hr {{ border: 0; border-top: 0.75pt solid {RULE}; margin: 12pt 0; }}
@@ -74,7 +82,8 @@ a {{ color: {ACCENT}; text-decoration: none; }}
 FOOTER_TEMPLATE = """
 <div style="width:100%; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:8pt;
             color:#4A5568; padding:0 0.8in; display:flex; justify-content:space-between;">
-  <span>{title}</span><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+  <span>{title}</span>
+  <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
 </div>
 """
 
@@ -206,7 +215,7 @@ def chrome_path() -> str | None:
 
 
 def print_pdf(html_text: str, pdf_path: Path, title: str) -> None:
-    """Print the HTML to PDF with Chrome through Playwright (installed Chrome, else bundled Chromium)."""
+    """Print the HTML to PDF through Playwright: installed Chrome, else bundled Chromium."""
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:

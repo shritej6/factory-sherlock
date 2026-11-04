@@ -75,7 +75,7 @@ class Block:
 
 
 def attach_figures(markdown_path: Path, blocks: list[Block]) -> None:
-    """Point each Mermaid block at its rendered PNG when render_milestone_figures.py produced one."""
+    """Point each Mermaid block at the PNG that render_milestone_figures.py produced, if any."""
     global CURRENT_SOURCE_DIR
     CURRENT_SOURCE_DIR = markdown_path.parent
     index = 0
@@ -330,7 +330,7 @@ def chrome_available() -> bool:
 
 
 def build_pdf(docx_path: Path, blocks: list[Block]) -> tuple[Path, str]:
-    """Print styled HTML with Chrome when Playwright is importable; else LibreOffice; else reportlab."""
+    """Print styled HTML with Chrome when Playwright imports; else LibreOffice; else reportlab."""
     pdf_path = docx_path.with_suffix(".pdf")
     if chrome_available():
         from html_pdf import print_pdf, render_html
@@ -368,10 +368,18 @@ def _pdf_styles() -> dict:
     return {
         "body": ParagraphStyle("body", **base),
         "meta": ParagraphStyle("meta", **{**base, "spaceAfter": 0}),
-        "title": ParagraphStyle("title", **{**heading, "fontSize": 15, "leading": 18, "spaceAfter": 6}),
-        "h1": ParagraphStyle("h1", **{**heading, "fontSize": 12, "leading": 14, "spaceBefore": 6, "spaceAfter": 3}),
-        "h2": ParagraphStyle("h2", **{**heading, "fontSize": 10.5, "leading": 13, "spaceBefore": 6, "spaceAfter": 3}),
-        "bullet": ParagraphStyle("bullet", **{**base, "leftIndent": 14, "bulletIndent": 3, "spaceAfter": 2}),
+        "title": ParagraphStyle(
+            "title", **{**heading, "fontSize": 15, "leading": 18, "spaceAfter": 6}
+        ),
+        "h1": ParagraphStyle(
+            "h1", **{**heading, "fontSize": 12, "leading": 14, "spaceBefore": 6, "spaceAfter": 3}
+        ),
+        "h2": ParagraphStyle(
+            "h2", **{**heading, "fontSize": 10.5, "leading": 13, "spaceBefore": 6, "spaceAfter": 3}
+        ),
+        "bullet": ParagraphStyle(
+            "bullet", **{**base, "leftIndent": 14, "bulletIndent": 3, "spaceAfter": 2}
+        ),
         "cell": ParagraphStyle("cell", fontName="Helvetica", fontSize=8.5, leading=10.2),
         "head": ParagraphStyle("head", fontName="Helvetica-Bold", fontSize=8.5, leading=10.2),
         "note": ParagraphStyle("note", **{**base, "fontName": "Helvetica-Oblique"}),
@@ -488,7 +496,9 @@ def _pdf_flowables(blocks: list[Block], styles: dict) -> list:
         elif block.kind == "bullet":
             flow.append(Paragraph(_markup(block.lines[0]), styles["bullet"], bulletText="-"))
         elif block.kind == "number":
-            flow.append(Paragraph(_markup(block.lines[0]), styles["bullet"], bulletText=f"{number}."))
+            flow.append(
+                Paragraph(_markup(block.lines[0]), styles["bullet"], bulletText=f"{number}.")
+            )
         elif block.kind == "table":
             flow.append(_pdf_table(block.lines, styles))
         elif block.kind == "code" and block.figure is not None and _ends_with_heading(flow):
@@ -540,7 +550,9 @@ def lint_markdown(markdown_path: Path) -> None:
     text = markdown_path.read_text(encoding="utf-8")
     for dash in FORBIDDEN_DASHES:
         if dash in text:
-            print(f"  warning: {markdown_path.name} contains U+{ord(dash):04X} dash", file=sys.stderr)
+            print(
+                f"  warning: {markdown_path.name} contains U+{ord(dash):04X} dash", file=sys.stderr
+            )
     prompts = len(re.findall(r"\[[^\]]+\]", text))
     if prompts:
         print(f"  note: {prompts} bracketed prompt(s) remain to be replaced by the student")

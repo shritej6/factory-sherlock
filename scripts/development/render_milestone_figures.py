@@ -33,7 +33,8 @@ style="display:inline-block;padding:8px"></div>
 <script src="{cdn}"></script>
 <script>
 mermaid.initialize({{startOnLoad: false, theme: "neutral", securityLevel: "loose",
-  er: {{fontSize: 34, entityPadding: 14, minEntityWidth: 150, minEntityHeight: 60, useMaxWidth: false}}}});
+  er: {{fontSize: 34, entityPadding: 14, minEntityWidth: 150, minEntityHeight: 60,
+       useMaxWidth: false}}}});
 async function render(source) {{
   const {{ svg }} = await mermaid.render("diagram", source);
   document.getElementById("figure").innerHTML = svg;
