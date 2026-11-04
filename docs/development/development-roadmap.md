@@ -91,5 +91,5 @@ Status: in progress. Next steps in order: execute the Docker path and the GitHub
 ## Dependencies between remaining work
 
 1. Screenshots and videos (phase 9 media) need the backend and frontend running against the demo data.
-2. Confirming the CI workflows requires pushing to a GitHub repository; their MySQL service container matches the local test setup but has not been observed from this machine.
+2. The three CI workflows ran green on the first push to GitHub on 2026-11-04 (Backend CI run 41779775539, Frontend CI run 41779775057, Docs Lint run 41779775596; see https://github.com/shritej6/factory-sherlock/actions). The backend job created the databases with the setup script, applied the migration, and ran the full suite against the MySQL 8.4 service container.
 3. Confirming the Docker path requires a machine with Docker installed.
