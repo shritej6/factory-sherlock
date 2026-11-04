@@ -39,7 +39,7 @@ Milestone-specific items:
 
 ## Regenerating DOCX and PDF
 
-Requirements: Python 3 with python-docx, pypdf, reportlab, and Pillow (pip install python-docx pypdf reportlab pillow). LibreOffice (soffice on PATH) is optional; when a working installation is found the PDF is converted from the DOCX, otherwise the PDF is rendered directly from the parsed Markdown with reportlab.
+Preferred path: run the builder from `backend/` with the `docs` dependency group (`cd backend && uv run --group docs python ../docs/milestones/build_documents.py`). The PDF is then printed by Chrome from styled HTML (html_pdf.py: Letter pages, running footer with page numbers, embedded figures). Without Playwright the script falls back to LibreOffice when `soffice` works, and otherwise to reportlab, so `python3 docs/milestones/build_documents.py` with python-docx, pypdf, reportlab, and Pillow installed still produces a plain PDF. The builder also accepts a path to any Markdown file outside this directory; Markdown image lines (`![caption](path)`) are embedded as figures.
 
 ```
 cd docs/milestones

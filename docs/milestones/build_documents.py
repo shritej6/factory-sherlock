@@ -6,6 +6,7 @@ Usage (run from any directory):
     python3 docs/milestones/build_documents.py              # every *.md here except README.md
     python3 docs/milestones/build_documents.py week08-proposal.md
     python3 docs/milestones/build_documents.py --no-pdf     # DOCX only
+    python3 docs/milestones/build_documents.py /path/to/other.md   # any Markdown file
 
 Requirements: python-docx, pypdf, reportlab, and Pillow (pip install python-docx
 pypdf reportlab pillow). LibreOffice (soffice on PATH) is optional. The script:
@@ -13,9 +14,10 @@ pypdf reportlab pillow). LibreOffice (soffice on PATH) is optional. The script:
 1. parses the Markdown subset used by these documents (headings, paragraphs,
    bullet and numbered lists, pipe tables, fenced code, bold and inline code);
 2. writes <name>.docx next to the Markdown with python-docx;
-3. writes <name>.pdf: converts the DOCX with soffice --headless when a working
-   LibreOffice is installed, otherwise renders the same parsed content directly
-   with reportlab (headings, paragraphs, lists, tables, code);
+3. writes <name>.pdf: prints styled HTML with Chrome through Playwright when the
+   playwright package is importable (run from backend/ with the docs group), else
+   converts the DOCX with soffice --headless when a working LibreOffice is installed,
+   otherwise renders the parsed content directly with reportlab;
 4. prints the PDF page count, the method used, and the number of bracketed
    prompts that still need to be replaced.
 
@@ -37,6 +39,8 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
@@ -54,10 +58,12 @@ MERMAID_NOTE = (
     "where it renders in the repository viewer."
 )
 FIGURE_DIR = HERE / "figures"
+CURRENT_SOURCE_DIR = HERE
 FIGURE_WIDTH_INCHES = 6.9
 HEADING_RESERVE_INCHES = 1.1
 FORBIDDEN_DASHES = (chr(0x2013), chr(0x2014))
 INLINE_PATTERN = re.compile(r"(\*\*[^*]+\*\*|`[^`]+`)")
+IMAGE_PATTERN = re.compile(r"^!\[([^\]]*)\]\(([^)]+)\)$")
 
 
 @dataclass
@@ -70,8 +76,12 @@ class Block:
 
 def attach_figures(markdown_path: Path, blocks: list[Block]) -> None:
     """Point each Mermaid block at its rendered PNG when render_milestone_figures.py produced one."""
+    global CURRENT_SOURCE_DIR
+    CURRENT_SOURCE_DIR = markdown_path.parent
     index = 0
     for block in blocks:
+        if block.kind == "image" and not Path(block.language).is_absolute():
+            block.language = str((markdown_path.parent / block.language).resolve())
         if block.kind == "code" and block.language == "mermaid":
             index += 1
             candidate = FIGURE_DIR / f"{markdown_path.stem}-{index}.png"
@@ -93,6 +103,9 @@ def parse_markdown(text: str) -> list[Block]:
             continue
         if line.startswith("#"):
             blocks.append(Block("heading", [line]))
+        elif IMAGE_PATTERN.match(line.strip()):
+            match = IMAGE_PATTERN.match(line.strip())
+            blocks.append(Block("image", [match.group(1)], language=match.group(2)))
         elif line.startswith("|"):
             index = _consume_while(lines, index, blocks, "table", lambda s: s.startswith("|"))
             continue
@@ -110,7 +123,7 @@ def parse_markdown(text: str) -> list[Block]:
 
 
 def _is_plain_line(line: str) -> bool:
-    if not line.strip() or line.startswith(("#", "|", "```")):
+    if not line.strip() or line.startswith(("#", "|", "```", "![")):
         return False
     return not re.match(r"^(- |\d+\. )", line)
 
@@ -267,6 +280,22 @@ def render_blocks(document: Document, blocks: list[Block]) -> None:
             render_table(document, block.lines)
         elif block.kind == "code":
             render_code(document, block)
+        elif block.kind == "image":
+            render_image(document, block)
+
+
+def render_image(document: Document, block: Block) -> None:
+    path = Path(block.language)
+    if not path.is_absolute():
+        path = CURRENT_SOURCE_DIR / path
+    document.add_picture(str(path), width=Inches(FIGURE_WIDTH_INCHES))
+    document.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    if block.lines[0]:
+        caption = document.add_paragraph()
+        caption.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = caption.add_run(block.lines[0])
+        run.italic = True
+        run.font.size = Pt(9)
 
 
 def build_docx(markdown_path: Path, blocks: list[Block]) -> Path:
@@ -290,10 +319,26 @@ def soffice_available() -> str | None:
     return soffice if probe.returncode == 0 else None
 
 
+def chrome_available() -> bool:
+    try:
+        import playwright.sync_api  # noqa: F401
+    except ImportError:
+        return False
+    from html_pdf import chrome_path
+
+    return chrome_path() is not None
+
+
 def build_pdf(docx_path: Path, blocks: list[Block]) -> tuple[Path, str]:
-    """Convert with LibreOffice when it runs; otherwise render the blocks with reportlab."""
-    soffice = soffice_available()
+    """Print styled HTML with Chrome when Playwright is importable; else LibreOffice; else reportlab."""
     pdf_path = docx_path.with_suffix(".pdf")
+    if chrome_available():
+        from html_pdf import print_pdf, render_html
+
+        title = document_title(blocks)
+        print_pdf(render_html(blocks, title, MERMAID_NOTE), pdf_path, title)
+        return pdf_path, "chrome"
+    soffice = soffice_available()
     if soffice is None:
         render_pdf_reportlab(blocks, pdf_path)
         return pdf_path, "reportlab"
@@ -450,6 +495,8 @@ def _pdf_flowables(blocks: list[Block], styles: dict) -> list:
             flow.append(KeepTogether([flow.pop(), _pdf_code(block, styles)]))
         elif block.kind == "code":
             flow.append(_pdf_code(block, styles))
+        elif block.kind == "image":
+            flow.append(_pdf_figure(Path(block.language)))
     return flow
 
 
@@ -476,6 +523,13 @@ def render_pdf_reportlab(blocks: list[Block], pdf_path: Path) -> None:
     document.build(_pdf_flowables(blocks, _pdf_styles()))
 
 
+def document_title(blocks: list[Block]) -> str:
+    for block in blocks:
+        if block.kind == "heading" and block.lines[0].startswith("# "):
+            return block.lines[0][2:].strip()
+    return "Document"
+
+
 def page_count(pdf_path: Path) -> int:
     from pypdf import PdfReader
 
@@ -494,7 +548,7 @@ def lint_markdown(markdown_path: Path) -> None:
 
 def select_sources(names: list[str]) -> list[Path]:
     if names:
-        return [HERE / name for name in names]
+        return [Path(name) if "/" in name else HERE / name for name in names]
     return sorted(p for p in HERE.glob("*.md") if p.name != "README.md")
 
 
