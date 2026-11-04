@@ -1,0 +1,185 @@
+%% Factory Sherlock entity-relationship diagram.
+%% Source of truth: backend/app/models/*.py and backend/migrations/versions/.
+%% Attribute types are abbreviated; exact MySQL types are in docs/database/data-dictionary.md.
+erDiagram
+    users {
+        int id PK
+        varchar username UK
+        varchar email UK
+        varchar password_hash
+        enum role
+        tinyint is_active
+        datetime created_at
+    }
+    products {
+        int id PK
+        varchar code UK
+        varchar name
+        text description
+        datetime created_at
+        datetime updated_at
+    }
+    product_specifications {
+        int id PK
+        int product_id FK
+        varchar characteristic
+        decimal target_value
+        decimal tolerance
+        varchar unit
+    }
+    machines {
+        int id PK
+        varchar code UK
+        varchar name
+        enum status
+        datetime created_at
+        datetime updated_at
+    }
+    machine_events {
+        int id PK
+        int machine_id FK
+        enum event_type
+        enum previous_state
+        enum new_state
+        enum severity
+        varchar description
+        datetime occurred_at
+    }
+    material_lots {
+        int id PK
+        varchar lot_number UK
+        varchar material_name
+        varchar supplier
+        decimal quantity_received
+        enum status
+        datetime received_at
+    }
+    production_orders {
+        int id PK
+        varchar order_number UK
+        int product_id FK
+        int machine_id FK
+        int quantity_planned
+        int quantity_completed
+        enum status
+        date due_date
+        datetime created_at
+        datetime updated_at
+    }
+    production_batches {
+        int id PK
+        varchar batch_number UK
+        int production_order_id FK
+        int machine_id FK
+        int quantity
+        enum status
+        datetime started_at
+        datetime completed_at
+        varchar quarantine_reason
+    }
+    batch_materials {
+        int batch_id PK, FK
+        int material_lot_id PK, FK
+        decimal quantity_used
+    }
+    production_units {
+        int id PK
+        int batch_id FK
+        varchar serial_number UK
+        int sequence_in_batch
+        datetime produced_at
+    }
+    defect_types {
+        int id PK
+        varchar code UK
+        varchar name
+        text description
+    }
+    inspections {
+        int id PK
+        int unit_id FK
+        int specification_id FK
+        decimal measured_value
+        enum result
+        datetime inspected_at
+    }
+    inspection_defects {
+        int inspection_id PK, FK
+        int defect_type_id PK, FK
+    }
+    alerts {
+        int id PK
+        int machine_id FK
+        enum alert_type
+        enum severity
+        varchar message
+        datetime created_at
+        datetime acknowledged_at
+        int acknowledged_by FK
+    }
+    investigations {
+        int id PK
+        varchar title
+        int machine_id FK
+        int product_id FK
+        datetime window_start
+        datetime window_end
+        enum status
+        text summary
+        text conclusion
+        int opened_by FK
+        datetime created_at
+        datetime closed_at
+    }
+    investigation_evidence {
+        int id PK
+        int investigation_id FK
+        int sequence
+        varchar rule_code
+        varchar title
+        text narrative
+        varchar query_name
+        text query_sql
+        json result_rows
+        datetime created_at
+    }
+    investigation_batches {
+        int investigation_id PK, FK
+        int batch_id PK, FK
+        varchar reason
+    }
+
+    %% Reference data
+    products ||--o{ product_specifications : "defines"
+    products ||--o{ production_orders : "is ordered by"
+    products |o--o{ investigations : "optionally scopes"
+    machines |o--o{ production_orders : "is planned on"
+    machines ||--o{ production_batches : "runs"
+    machines ||--o{ machine_events : "logs"
+    machines |o--o{ alerts : "raises"
+    machines |o--o{ investigations : "optionally scopes"
+    users |o--o{ alerts : "acknowledges"
+    users |o--o{ investigations : "opens"
+
+    %% Production chain
+    production_orders ||--o{ production_batches : "is fulfilled by"
+    production_batches ||--o{ production_units : "produces"
+
+    %% Many-to-many 1: batches and material lots
+    production_batches ||--o{ batch_materials : "consumes"
+    material_lots ||--o{ batch_materials : "is consumed in"
+
+    %% Quality
+    production_units ||--o{ inspections : "is measured by"
+    product_specifications ||--o{ inspections : "is checked against"
+
+    %% Many-to-many 2: inspections and defect types
+    inspections ||--o{ inspection_defects : "is classified by"
+    defect_types ||--o{ inspection_defects : "classifies"
+
+    %% Investigation
+    investigations ||--o{ investigation_evidence : "collects"
+
+    %% Many-to-many 3: investigations and batches
+    investigations ||--o{ investigation_batches : "flags"
+    production_batches ||--o{ investigation_batches : "is flagged in"

@@ -1,0 +1,34 @@
+%% Simulation event flow. Source of truth: backend/app/simulation/engine.py and
+%% backend/app/services/simulation_service.py. Rendered in docs/simulation/simulation-design.md.
+flowchart TD
+    Req["POST /api/v1/simulation/runs<br/>SimulationRequest"] --> Cat["load_catalog(session)<br/>products, specs, machines, lots, defect types"]
+    Req --> Cfg["to_config(request)<br/>SimulationConfig + FaultScenario tuple"]
+    Cat --> Eng["SimulationEngine(config, catalog)<br/>random.Random(seed)"]
+    Cfg --> Eng
+    Eng --> M{"for each machine<br/>(code order)"}
+    M --> Start["tracker: IDLE -> RUNNING<br/>clock = start_time"]
+    Start --> B{"for batch_index in<br/>range(batches_per_machine)"}
+    B -->|"index % batches_per_order == 0"| Ord["SimulatedOrder"]
+    B --> F{"fault scheduled<br/>at this index?"}
+    F -->|"yes"| Inj["FaultEvent + state change<br/>ActiveFault appended"]
+    Inj -->|"DOWNTIME"| Skip["FAULT -> STOPPED -> IDLE -> RUNNING<br/>clock += minutes_per_batch<br/>batch slot lost"]
+    Skip --> B
+    Inj -->|"measurement fault"| Prod
+    F -->|"no"| Prod["produce batch:<br/>units evenly spaced"]
+    Prod --> U{"for each unit,<br/>each specification"}
+    U --> Eff["combined_effect(active faults)"]
+    Eff --> Meas["MeasurementGenerator.generate"]
+    Meas --> Eval["evaluate_measurement<br/>classify_defect"]
+    Eval --> Insp["SimulatedInspection<br/>(PASS or FAIL + defect codes)"]
+    Insp --> Adv["ActiveFault.advance() per unit"]
+    Adv --> U
+    U -->|"done"| Lots["assign material lots<br/>SimulatedBatch"]
+    Lots --> Rate{"defect_rate >= alert_defect_rate<br/>and previous batch not alerted?"}
+    Rate -->|"yes"| Alert["SimulatedAlert HIGH_DEFECT_RATE"]
+    Rate -->|"no"| B
+    Alert --> B
+    B -->|"done"| Fin["RUNNING -> IDLE (or stay WARNING)<br/>record final state"]
+    Fin --> M
+    M -->|"done"| Out["SimulationOutput"]
+    Out --> Persist["simulation_service.persist<br/>orders, batches, lots, units, inspections,<br/>defects, events, alerts, machine status"]
+    Persist --> Commit["request session commits<br/>(rollback on any error)"]

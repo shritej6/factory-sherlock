@@ -1,0 +1,17 @@
+%% Investigation workflow. Source of truth: backend/app/investigation/ and
+%% backend/app/services/investigation_service.py. Rendered in docs/investigation/investigation-engine.md.
+flowchart TD
+    A["Alert or dashboard shows a high defect rate"] --> B["Engineer opens an investigation:<br/>title, machine (optional), window"]
+    B --> C["Service validates window and machine"]
+    C --> D["Rules R1 to R6 run in order<br/>against database/queries SQL"]
+    D --> E["Evidence cards: narrative + SQL + rows"]
+    D --> F["Summary built from context<br/>(no causal claims)"]
+    E --> G["Investigation stored OPEN with evidence<br/>and links to batches above 10%"]
+    F --> G
+    G --> H["Engineer reads the case board,<br/>reruns SQL if needed"]
+    H --> I{"Decision"}
+    I -->|"needs review"| J["Status IN_REVIEW"]
+    J --> H
+    I -->|"quarantine"| K["POST /production-batches/{id}/quarantine<br/>or /traceability/material-lots/{id}/quarantine"]
+    K --> H
+    I -->|"conclude"| L["Status CLOSED with written conclusion"]

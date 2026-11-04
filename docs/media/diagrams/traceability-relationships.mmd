@@ -1,0 +1,42 @@
+%% Material traceability relationships. Source of truth: backend/app/models/material.py,
+%% production.py, quality.py, investigation.py. Rendered in docs/investigation/traceability-design.md.
+erDiagram
+    MATERIAL_LOTS ||--o{ BATCH_MATERIALS : "consumed by"
+    PRODUCTION_BATCHES ||--o{ BATCH_MATERIALS : "uses"
+    PRODUCTION_ORDERS ||--o{ PRODUCTION_BATCHES : "fulfilled by"
+    PRODUCTS ||--o{ PRODUCTION_ORDERS : "ordered as"
+    MACHINES ||--o{ PRODUCTION_BATCHES : "runs"
+    PRODUCTION_BATCHES ||--o{ PRODUCTION_UNITS : "produces"
+    PRODUCTION_UNITS ||--o{ INSPECTIONS : "measured by"
+    PRODUCT_SPECIFICATIONS ||--o{ INSPECTIONS : "against"
+    INSPECTIONS ||--o{ INSPECTION_DEFECTS : "classified as"
+    DEFECT_TYPES ||--o{ INSPECTION_DEFECTS : "names"
+    INVESTIGATIONS ||--o{ INVESTIGATION_BATCHES : "flags"
+    PRODUCTION_BATCHES ||--o{ INVESTIGATION_BATCHES : "flagged in"
+
+    MATERIAL_LOTS {
+        int id PK
+        string lot_number UK
+        string material_name
+        string supplier
+        enum status "AVAILABLE, QUARANTINED, CONSUMED"
+    }
+    BATCH_MATERIALS {
+        int batch_id PK, FK
+        int material_lot_id PK, FK
+        decimal quantity_used
+    }
+    PRODUCTION_BATCHES {
+        int id PK
+        string batch_number UK
+        int production_order_id FK
+        int machine_id FK
+        enum status "IN_PROGRESS, COMPLETED, QUARANTINED"
+        string quarantine_reason
+    }
+    PRODUCTION_UNITS {
+        int id PK
+        string serial_number UK
+        int batch_id FK
+        int sequence_in_batch
+    }

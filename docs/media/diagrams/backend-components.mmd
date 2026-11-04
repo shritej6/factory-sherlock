@@ -1,0 +1,103 @@
+%% Backend component diagram for Factory Sherlock (backend/app).
+%% Embedded in docs/architecture/component-design.md; keep both copies in sync.
+flowchart LR
+    subgraph main["app/main.py"]
+        App["create_app()<br/>CORS, error handlers, api_router"]
+    end
+
+    subgraph api["app/api"]
+        Router["router.py<br/>/api/v1"]
+        Deps["deps.py<br/>DbSession, CurrentUser,<br/>Operator, Engineer"]
+        ErrH["errors.py<br/>register_error_handlers"]
+        R1["routes/health"]
+        R2["routes/auth"]
+        R3["routes/catalog"]
+        R4["routes/production"]
+        R5["routes/quality"]
+        R6["routes/investigations"]
+        R7["routes/traceability"]
+        R8["routes/analytics"]
+        R9["routes/simulation"]
+    end
+
+    subgraph schemas["app/schemas"]
+        Sch["auth, catalog, production,<br/>quality, investigation,<br/>analytics, simulation, common"]
+    end
+
+    subgraph services["app/services"]
+        S1["auth_service"]
+        S2["catalog_service"]
+        S3["production_service"]
+        S4["quality_service"]
+        S5["traceability_service"]
+        S6["investigation_service"]
+        S7["analytics_service"]
+        S8["simulation_service"]
+    end
+
+    subgraph domain["app/domain"]
+        D1["quality_rules<br/>evaluate_measurement,<br/>classify_defect, defect_rate"]
+        D2["state_machines<br/>transition tables,<br/>assert_transition"]
+    end
+
+    subgraph simulation["app/simulation"]
+        SimE["engine.SimulationEngine"]
+        SimC["config, faults,<br/>measurement, machine_state, events"]
+    end
+
+    subgraph investigation["app/investigation"]
+        IE["engine.investigate"]
+        IR["rules R1 to R6<br/>InvestigationContext, Evidence"]
+        IS["summary.build_summary"]
+    end
+
+    subgraph repos["app/repositories"]
+        QL["sql_loader<br/>load_sql, load_query, query_names"]
+        QR["query_runner<br/>SqlQueryRunner, QueryRunner protocol"]
+    end
+
+    subgraph models["app/models"]
+        M["ORM models + enums<br/>Base.metadata"]
+    end
+
+    subgraph core["app/core"]
+        C1["config.get_settings"]
+        C2["database.engine, SessionLocal,<br/>get_db_session, Base"]
+        C3["security.hash_password,<br/>create/decode_access_token"]
+        C4["logging.configure_logging"]
+        C6["clock.now"]
+        C5["exceptions.AppError family"]
+    end
+
+    SQLF["database/queries/**/*.sql"]
+    DB[("MySQL 8")]
+
+    App --> Router
+    App --> ErrH
+    Router --> R1 & R2 & R3 & R4 & R5 & R6 & R7 & R8 & R9
+    R2 --> S1
+    R3 --> S2
+    R4 --> S3 & S5
+    R5 --> S4
+    R6 --> S6
+    R7 --> S5 & S2
+    R8 --> S7
+    R9 --> S8
+    api --> Deps
+    Deps --> C2 & C3 & S1
+    api --> Sch
+    S2 & S3 & S5 & S6 --> D2
+    S4 --> D1
+    S6 --> IE
+    IE --> IR --> IS
+    S8 --> SimE
+    SimE --> SimC
+    SimE --> D1 & D2
+    S5 & S7 & S6 --> QR
+    IR --> QR
+    QR --> QL
+    QL --> SQLF
+    services --> M
+    M --> C2
+    C2 --> DB
+    QR --> DB

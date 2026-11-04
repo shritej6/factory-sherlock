@@ -1,0 +1,26 @@
+%% Manufacturing workflow: production order, batch, unit, inspection, and containment.
+%% Source of truth: backend/app/domain/state_machines.py, backend/app/services/production_service.py,
+%% quality_service.py, traceability_service.py. Rendered in docs/requirements and docs/investigation.
+flowchart TD
+    A["Engineer creates production order<br/>POST /production-orders<br/>status PLANNED"] --> B{"Machine assigned?"}
+    B -->|"no"| B1["PATCH /production-orders/{id}<br/>set machine_id"]
+    B1 --> C
+    B -->|"yes"| C["Operator releases order<br/>POST /production-orders/{id}/status RELEASED"]
+    C --> D["Operator starts batch<br/>POST /production-batches<br/>quantity + material lots (AVAILABLE only)"]
+    D --> D1["Order -> IN_PROGRESS<br/>batch IN_PROGRESS<br/>batch_materials rows<br/>production_units with serials"]
+    D1 --> E["Operator records inspections<br/>POST /inspections<br/>one per unit and specification"]
+    E --> E1["evaluate_measurement:<br/>abs(measured - target) <= tolerance"]
+    E1 -->|"PASS"| F
+    E1 -->|"FAIL"| E2["classify_defect -> defect type<br/>inspection_defects rows"]
+    E2 --> F["Operator completes batch<br/>POST /production-batches/{id}/complete"]
+    F --> F1["quantity_completed += batch.quantity<br/>order -> COMPLETED when planned reached"]
+    F1 --> G{"Batch defect rate<br/>>= 0.10?"}
+    G -->|"no"| H["Routine monitoring<br/>dashboard queries"]
+    G -->|"yes"| I["Batch listed by<br/>batches_requiring_review"]
+    I --> J["Engineer opens investigation<br/>POST /investigations"]
+    J --> K{"Containment decision"}
+    K -->|"batch"| L["POST /production-batches/{id}/quarantine<br/>status QUARANTINED (terminal)"]
+    K -->|"material lot"| M["POST /traceability/material-lots/{id}/quarantine<br/>lot + every linked batch, one transaction"]
+    K -->|"none"| N["Close investigation with conclusion"]
+    L --> N
+    M --> N

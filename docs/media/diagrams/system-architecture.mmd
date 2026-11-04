@@ -1,0 +1,53 @@
+%% High-level system architecture for Factory Sherlock.
+%% Embedded in docs/architecture/system-overview.md; keep both copies in sync.
+flowchart TB
+    subgraph Presentation["Presentation (frontend/)"]
+        SPA["React + TypeScript SPA<br/>Vite dev server :5173"]
+    end
+
+    subgraph Backend["Backend process (FastAPI, uvicorn)"]
+        subgraph API["API layer (app/api)"]
+            Routes["Route modules<br/>health, auth, catalog, production, quality,<br/>investigations, traceability, analytics, simulation"]
+            Deps["deps.py<br/>DbSession, CurrentUser, role guards"]
+            Errors["errors.py<br/>typed error to HTTP mapping"]
+        end
+        subgraph Services["Application services (app/services)"]
+            Svc["auth, catalog, production, quality,<br/>traceability, investigation, analytics, simulation"]
+        end
+        subgraph Domain["Domain (app/domain)"]
+            Rules["quality_rules.py<br/>state_machines.py"]
+        end
+        subgraph Sim["Simulation subsystem (app/simulation)"]
+            Engine["SimulationEngine<br/>config, faults, measurement, machine_state, events"]
+        end
+        subgraph Inv["Investigation subsystem (app/investigation)"]
+            InvEngine["investigate()<br/>rules R1 to R6, summary"]
+        end
+        subgraph Data["Data access"]
+            ORM["SQLAlchemy models<br/>(app/models)"]
+            Runner["sql_loader.py + query_runner.py<br/>(app/repositories)"]
+        end
+        subgraph Core["Cross-cutting (app/core)"]
+            Cfg["config, database, security,<br/>clock, logging, exceptions"]
+        end
+    end
+
+    Files["database/queries/*.sql<br/>(12 files)"]
+    DB[("MySQL 8<br/>17 tables, Alembic managed")]
+
+    SPA -->|"HTTP JSON + Bearer JWT"| Routes
+    Routes --> Deps
+    Routes --> Svc
+    Svc --> Rules
+    Svc --> Engine
+    Svc --> InvEngine
+    Engine --> Rules
+    Svc --> ORM
+    Svc --> Runner
+    InvEngine --> Runner
+    Runner -->|"reads at startup"| Files
+    ORM --> DB
+    Runner --> DB
+    Core -.-> API
+    Core -.-> Services
+    Core -.-> Data

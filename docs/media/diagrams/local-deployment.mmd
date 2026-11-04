@@ -1,0 +1,38 @@
+%% Local deployment architecture for Factory Sherlock.
+%% Embedded in docs/architecture/component-design.md; keep both copies in sync.
+flowchart LR
+    subgraph Browser["Developer browser"]
+        UI["React SPA<br/>http://localhost:5173"]
+    end
+
+    subgraph Node["Node toolchain (frontend/)"]
+        Vite["Vite dev server :5173<br/>proxies /api to :8000"]
+    end
+
+    subgraph Python["Python toolchain (backend/, uv)"]
+        Uvicorn["uvicorn app.main:app :8000<br/>/api/v1, /api/docs"]
+        Alembic["alembic upgrade head"]
+        Seed["python -m app.seed [--demo]"]
+    end
+
+    subgraph MySQLOpt["MySQL 8 (one of two options)"]
+        Local["scripts/development/local_mysql.sh<br/>mysqld bound to 127.0.0.1<br/>data in .local/mysql<br/>port from .env (3307 in this checkout)"]
+        Compose["docker-compose.yml<br/>mysql:8.4 container<br/>port ${MYSQL_PORT:-3306}<br/>volume mysql-data"]
+    end
+
+    Env[".env (repository root)<br/>MYSQL_*, JWT_SECRET_KEY,<br/>SEED_DEMO_PASSWORD, CORS_ORIGINS"]
+    Init["scripts/setup/init_databases.sh<br/>creates factory_sherlock,<br/>factory_sherlock_test, app user"]
+
+    UI -->|"HTTP"| Vite
+    Vite -->|"proxy /api"| Uvicorn
+    UI -.->|"direct call, CORS allowed"| Uvicorn
+    Uvicorn -->|"pymysql, sherlock_app user"| Local
+    Uvicorn -.-> Compose
+    Alembic --> Local
+    Seed --> Local
+    Env --> Uvicorn
+    Env --> Alembic
+    Env --> Local
+    Env --> Compose
+    Local -->|"init"| Init
+    Compose -->|"docker-entrypoint-initdb.d"| Init
