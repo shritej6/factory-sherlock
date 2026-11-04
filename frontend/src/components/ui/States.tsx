@@ -1,0 +1,73 @@
+import type { ReactNode } from 'react';
+
+import { ApiError } from '@/services/http';
+import { describeError } from '@/utils/errors';
+
+import { Button } from './Button';
+
+export function LoadingState({ label = 'Loading' }: { label?: string }) {
+  return (
+    <div role="status" aria-live="polite" className="px-2 py-6 text-center text-sm text-ink-muted">
+      {label}
+    </div>
+  );
+}
+
+export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="rounded-panel border border-dashed border-border px-4 py-8 text-center">
+      <p className="text-sm font-medium text-ink">{title}</p>
+      {hint && <p className="mt-1 text-xs text-ink-muted">{hint}</p>}
+    </div>
+  );
+}
+
+export function ErrorState({
+  error,
+  onRetry,
+  title = 'Something went wrong',
+}: {
+  error: unknown;
+  onRetry?: () => void;
+  title?: string;
+}) {
+  return (
+    <div
+      role="alert"
+      className="rounded-panel border border-status-fault bg-status-fault-soft px-4 py-3 text-sm text-ink"
+    >
+      <p className="font-medium">{title}</p>
+      <p className="mt-1 text-ink-muted">{describeError(error)}</p>
+      {error instanceof ApiError && error.requestId && (
+        <p className="mt-1 font-mono text-xs text-ink-faint">Request id {error.requestId}</p>
+      )}
+      {onRetry && (
+        <Button size="sm" className="mt-3" onClick={onRetry}>
+          Try again
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export function InlineNotice({
+  tone,
+  children,
+}: {
+  tone: 'error' | 'success' | 'info';
+  children: ReactNode;
+}) {
+  const classes = {
+    error: 'border-status-fault bg-status-fault-soft',
+    success: 'border-status-running bg-status-running-soft',
+    info: 'border-status-info bg-status-info-soft',
+  }[tone];
+  return (
+    <div
+      role={tone === 'error' ? 'alert' : 'status'}
+      className={`rounded-panel border px-3 py-2 text-sm text-ink ${classes}`}
+    >
+      {children}
+    </div>
+  );
+}
