@@ -21,7 +21,7 @@ Every report follows the seven standard sections from the assignment (completion
 Before the lab defense begins:
 
 1. Replace every bracketed prompt in the Markdown, including the commit hash, repository URL, and submission date.
-2. Rebuild the DOCX and PDF (see below) and check the page count printed by the script. The assignment asks for a concise 2 to 3 page Week 8 proposal; with the embedded ERD and the reflection the generated PDF runs to four pages, so trim sections 8 and 11 if the instructor wants the shorter form.
+2. Rebuild the DOCX and PDF (see below) and check the page count printed by the script. The assignment asks for a concise 2 to 3 page Week 8 proposal; pass `--compact` to the builder for the denser Chrome page layout (smaller type, tighter margins, narrower figures) and trim sections 8 and 11 if the count is still above three.
 3. Upload Week##_Milestone_Report.pdf (and for Week 8 the proposal PDF) to Canvas before the scheduled lab defense. A repository commit does not replace the Canvas submission.
 4. Push the repository and record the commit hash or tag in the report. Confirm that the instructor can access the repository.
 5. Open the Canvas artifact and the repository during the defense; be ready to explain what, why, assumptions, AI contributions, and verification evidence.

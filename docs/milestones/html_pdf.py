@@ -79,6 +79,22 @@ hr {{ border: 0; border-top: 0.75pt solid {RULE}; margin: 12pt 0; }}
 a {{ color: {ACCENT}; text-decoration: none; }}
 """
 
+COMPACT_CSS = """
+@page { size: Letter; margin: 0.65in 0.7in 0.75in 0.7in; }
+html { font-size: 9.75pt; }
+body { line-height: 1.3; }
+h1 { font-size: 17pt; margin-bottom: 4pt; padding-bottom: 6pt; }
+.meta { margin: 6pt 0 10pt 0; }
+.meta div { line-height: 1.35; }
+h2 { font-size: 12pt; margin: 11pt 0 4pt 0; }
+p { margin-bottom: 5pt; }
+li { margin-bottom: 2pt; }
+table { font-size: 8.25pt; line-height: 1.25; margin: 3pt 0 7pt 0; }
+th, td { padding: 2.5pt 4pt; }
+figure { margin: 4pt 0 8pt 0; }
+figure img { max-width: 62%; }
+"""
+
 FOOTER_TEMPLATE = """
 <div style="width:100%; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; font-size:8pt;
             color:#4A5568; padding:0 0.8in; display:flex; justify-content:space-between;">
@@ -166,8 +182,11 @@ def _list(kind: str, items: list[str]) -> str:
     return f"<{tag}>" + "".join(f"<li>{markup(item)}</li>" for item in items) + f"</{tag}>"
 
 
-def render_html(blocks: list, title: str, mermaid_note: str) -> str:
-    """Return a complete HTML document for the parsed blocks."""
+def render_html(blocks: list, title: str, mermaid_note: str, compact: bool = False) -> str:
+    """Return a complete HTML document for the parsed blocks.
+
+    ``compact`` appends the denser page layout used for length-limited submissions.
+    """
     out: list[str] = []
     pending_kind = ""
     pending_items: list[str] = []
@@ -202,9 +221,10 @@ def render_html(blocks: list, title: str, mermaid_note: str) -> str:
             out.append("<hr>")
     flush()
     body = "\n".join(out)
+    css = CSS + COMPACT_CSS if compact else CSS
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
-        f"<title>{html.escape(title)}</title><style>{CSS}</style></head>"
+        f"<title>{html.escape(title)}</title><style>{css}</style></head>"
         f"<body>{body}</body></html>"
     )
 

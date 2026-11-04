@@ -329,14 +329,14 @@ def chrome_available() -> bool:
     return chrome_path() is not None
 
 
-def build_pdf(docx_path: Path, blocks: list[Block]) -> tuple[Path, str]:
+def build_pdf(docx_path: Path, blocks: list[Block], compact: bool = False) -> tuple[Path, str]:
     """Print styled HTML with Chrome when Playwright imports; else LibreOffice; else reportlab."""
     pdf_path = docx_path.with_suffix(".pdf")
     if chrome_available():
         from html_pdf import print_pdf, render_html
 
         title = document_title(blocks)
-        print_pdf(render_html(blocks, title, MERMAID_NOTE), pdf_path, title)
+        print_pdf(render_html(blocks, title, MERMAID_NOTE, compact), pdf_path, title)
         return pdf_path, "chrome"
     soffice = soffice_available()
     if soffice is None:
@@ -568,6 +568,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("sources", nargs="*", help="Markdown file names inside docs/milestones")
     parser.add_argument("--no-pdf", action="store_true", help="build DOCX only")
+    parser.add_argument(
+        "--compact",
+        action="store_true",
+        help="denser Chrome page layout for length-limited submissions such as the proposal",
+    )
     args = parser.parse_args()
     for source in select_sources(args.sources):
         if not source.exists():
@@ -581,7 +586,7 @@ def main() -> int:
         print(f"  wrote {docx_path.name}")
         if args.no_pdf:
             continue
-        pdf_path, method = build_pdf(docx_path, blocks)
+        pdf_path, method = build_pdf(docx_path, blocks, args.compact)
         print(f"  wrote {pdf_path.name} via {method} ({page_count(pdf_path)} pages)")
     return 0
 
