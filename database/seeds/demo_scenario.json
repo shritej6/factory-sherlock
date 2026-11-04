@@ -1,0 +1,12 @@
+{
+  "description": "Default demonstration: one production day (06:00 to 12:00) on three machines. CNC-03 develops tool wear at its fifth batch and CNC-02 suffers one downtime slot.",
+  "seed": 42,
+  "start_time": "2026-11-02T06:00:00",
+  "batches_per_machine": 12,
+  "units_per_batch": 20,
+  "minutes_per_batch": 30,
+  "faults": [
+    { "machine_code": "CNC-03", "fault": "TOOL_WEAR", "start_batch_index": 4 },
+    { "machine_code": "CNC-02", "fault": "DOWNTIME", "start_batch_index": 6 }
+  ]
+}
