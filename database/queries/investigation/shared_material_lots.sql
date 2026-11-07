@@ -10,6 +10,16 @@
 -- Known limit: batch_numbers is a GROUP_CONCAT and is cut at
 --   group_concat_max_len (default 1024 characters, about 40 batch numbers);
 --   affected_batches_using_lot stays exact because it is a COUNT.
+-- Used by: rule R4 (shared material lot across the flagged batches)
+-- Performance: EXPLAIN at demo volume (47 batch_materials rows, 9 lots, 35
+--   batches) with four batch ids starts from production_batches as a range
+--   scan on PRIMARY for the IN list (4 rows, "Using temporary; Using
+--   filesort" for the GROUP BY and ORDER BY), reads batch_materials by ref on
+--   its composite PRIMARY (batch_id leading, "Using index"), and material_lots
+--   by eq_ref on PRIMARY. The correlated total_batches_using_lot subquery is a
+--   DEPENDENT SUBQUERY on the implicit material_lot_id index (about 5 rows
+--   per lot, "Using index"), executed once per lot in the result (3 lots in
+--   the demo), not once per batch.
 SELECT
     ml.id   AS lot_id,
     ml.lot_number,

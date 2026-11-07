@@ -1,6 +1,7 @@
 """Every documented SQL file runs against simulated data and returns sane shapes."""
 
 from datetime import datetime
+from math import sqrt
 
 from app.models import Inspection
 from app.repositories.query_runner import SqlQueryRunner
@@ -134,9 +135,9 @@ def test_control_chart_subgroups_cover_every_inspection_of_the_specification(
     assert first["lcl"] < first["grand_mean"] < first["ucl"]
     assert first["lower_spec_limit"] == 19.9 and first["upper_spec_limit"] == 20.1
     assert first["target_value"] == 20.0
-    assert all(
-        (r["grand_mean"], r["ucl"], r["lcl"]) == (first["grand_mean"], first["ucl"], first["lcl"])
-        for r in rows
+    assert all(r["grand_mean"] == first["grand_mean"] for r in rows)
+    assert all((r["ucl"], r["lcl"]) == (first["ucl"], first["lcl"]) for r in rows), (
+        "equal sample counts share the same limits"
     )
     assert all(r["min_value"] <= r["mean_value"] <= r["max_value"] for r in rows)
     assert all(r["std_dev"] is not None and r["std_dev"] > 0 for r in rows)
@@ -144,6 +145,37 @@ def test_control_chart_subgroups_cover_every_inspection_of_the_specification(
     keys = [(r["subgroup_start"], r["batch_id"]) for r in rows]
     assert keys == sorted(keys)
     assert rows[-1]["mean_value"] > rows[-1]["ucl"], "tool wear drifts the last batch above UCL"
+
+
+def test_control_chart_limits_widen_for_smaller_subgroups(
+    db_session: Session,
+    client: TestClient,
+    engineer: dict[str, str],
+    simulated: dict[str, object],
+) -> None:
+    """A window that cuts the second batch in half gives that subgroup its own, wider limits."""
+    rows = SqlQueryRunner(db_session).run(
+        "characteristic_control_chart",
+        {
+            "window_start": datetime(2026, 11, 2, 6),
+            "window_end": datetime(2026, 11, 2, 6, 45),
+            "specification_id": _diameter_spec_id(client, engineer),
+            "machine_id": None,
+        },
+    )
+    assert [r["sample_count"] for r in rows] == [30, 14]
+    full, partial = rows
+    assert full["grand_mean"] == partial["grand_mean"]
+    assert partial["ucl"] > full["ucl"] and partial["lcl"] < full["lcl"]
+
+    def three_sigma(row: dict[str, object]) -> float:
+        return (float(row["ucl"]) - float(row["grand_mean"])) * sqrt(int(row["sample_count"]))
+
+    assert abs(three_sigma(full) - three_sigma(partial)) < 1e-3
+    for row in rows:
+        above = float(row["ucl"]) - float(row["grand_mean"])
+        below = float(row["grand_mean"]) - float(row["lcl"])
+        assert abs(above - below) <= 2e-4, "limits are symmetric up to the 4-place rounding"
 
 
 def test_control_chart_machine_filter_follows_the_optional_parameter_pattern(

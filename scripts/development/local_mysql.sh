@@ -68,7 +68,7 @@ start_server() {
   mysqld --datadir="${data_dir}" --port="${port}" --socket="${socket}" $(layout_args) \
     --pid-file="${pid_file}" --log-error="${log_file}" --bind-address=127.0.0.1 \
     --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci \
-    --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO \
+    --sql-mode=ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION \
     --mysqlx=OFF --daemonize
   local ready=0
   for _ in $(seq 1 30); do

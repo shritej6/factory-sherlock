@@ -33,6 +33,8 @@ class Inspection(Base):
     __table_args__ = (
         UniqueConstraint("unit_id", "specification_id", name="uq_inspection_unit_spec"),
         Index("ix_inspections_time_result", "inspected_at", "result"),
+        Index("ix_inspections_time_id", "inspected_at", "id"),
+        Index("ix_inspections_spec_time", "specification_id", "inspected_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

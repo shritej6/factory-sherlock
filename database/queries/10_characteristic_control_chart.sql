@@ -7,8 +7,10 @@
 -- Techniques: three chained CTEs (filter, per-subgroup aggregation, window
 --   functions over the whole window); subgroup = production batch; STDDEV_SAMP
 --   and VAR_SAMP (both NULL when a subgroup has one sample); window functions
---   SUM OVER () and AVG OVER () so the control limits are computed once over
---   every subgroup and repeated on each row; the optional machine filter
+--   SUM OVER () so the grand mean and the pooled standard deviation are
+--   computed once over every subgroup and repeated on each row, while the
+--   control limits are then evaluated per row from that row's own sample
+--   count (a variable-n X-bar chart); the optional machine filter
 --   (:machine_id IS NULL OR b.machine_id = :machine_id) as in query 08; the
 --   specification row is joined by constant for the reference columns.
 -- Formula (stated once here and in docs/database/queries.md):
@@ -18,8 +20,10 @@
 --   pooled_std_dev  = SQRT( SUM((n_i - 1) * s_i^2) / SUM(n_i - 1) ) over the
 --                     subgroups with n_i >= 2, where n_i is the subgroup sample
 --                     count and s_i its STDDEV_SAMP
---   avg_sample_size = AVG(n_i) over every subgroup
---   ucl / lcl       = grand_mean +/- 3 * pooled_std_dev / SQRT(avg_sample_size)
+--   ucl_i / lcl_i   = grand_mean +/- 3 * pooled_std_dev / SQRT(n_i), evaluated
+--                     per subgroup, so a subgroup with fewer samples gets wider
+--                     limits than a full one; two subgroups with the same
+--                     sample count share the same limits
 --   No c4 bias correction is applied, and no S-chart limits (B3/B4) are
 --   computed: std_dev is returned per subgroup for plotting only. When every
 --   subgroup has a single sample, pooled_std_dev, ucl, and lcl are NULL.
@@ -29,8 +33,9 @@
 --   inside the window, ordered by subgroup_start then batch_id: batch_id,
 --   batch_number, machine_code, subgroup_start (batch started_at),
 --   sample_count, mean_value, std_dev, min_value, max_value, target_value,
---   lower_spec_limit, upper_spec_limit, grand_mean, ucl, lcl. mean_value,
---   std_dev, grand_mean, ucl, and lcl are rounded to four places; the other
+--   lower_spec_limit, upper_spec_limit, grand_mean, ucl, lcl (the last two
+--   computed from that row's sample_count). mean_value, std_dev, grand_mean,
+--   ucl, and lcl are rounded to four places; the other
 --   numeric columns are exact DECIMAL(10,3) values. A batch whose inspections
 --   straddle a window edge contributes only the inspections inside the window.
 -- Used by: analytics dashboard (control chart screen), SQL explorer
@@ -90,8 +95,7 @@ limits AS (
         sg.*,
         SUM(sg.sum_value) OVER () / SUM(sg.sample_count) OVER ()          AS grand_mean,
         SQRT(SUM((sg.sample_count - 1) * sg.var_sample) OVER ()
-             / NULLIF(SUM(sg.sample_count - 1) OVER (), 0))                AS pooled_std_dev,
-        AVG(sg.sample_count) OVER ()                                       AS avg_sample_size
+             / NULLIF(SUM(sg.sample_count - 1) OVER (), 0))                AS pooled_std_dev
     FROM subgroups sg
 )
 SELECT
@@ -108,8 +112,8 @@ SELECT
     s.target_value - s.tolerance    AS lower_spec_limit,
     s.target_value + s.tolerance    AS upper_spec_limit,
     ROUND(l.grand_mean, 4)          AS grand_mean,
-    ROUND(l.grand_mean + 3 * l.pooled_std_dev / SQRT(l.avg_sample_size), 4) AS ucl,
-    ROUND(l.grand_mean - 3 * l.pooled_std_dev / SQRT(l.avg_sample_size), 4) AS lcl
+    ROUND(l.grand_mean + 3 * l.pooled_std_dev / SQRT(l.sample_count), 4) AS ucl,
+    ROUND(l.grand_mean - 3 * l.pooled_std_dev / SQRT(l.sample_count), 4) AS lcl
 FROM limits l
 JOIN product_specifications s ON s.id = :specification_id
 ORDER BY l.subgroup_start, l.batch_id;

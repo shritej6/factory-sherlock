@@ -68,6 +68,7 @@ class Investigation(Base):
         CheckConstraint(
             "(status = 'CLOSED') = (closed_at IS NOT NULL)", name="ck_investigation_closed"
         ),
+        Index("ix_investigations_created_id", "created_at", "id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
