@@ -106,7 +106,7 @@ cd backend
 uv run uvicorn app.main:app --reload --port 8000 --no-proxy-headers
 ```
 
-`--no-proxy-headers` makes uvicorn keep the TCP peer as `request.client` instead of rewriting it from `X-Forwarded-For`. The login throttle counts failures per client address, and uvicorn's default trusts that header from loopback, which is where the Vite proxy connects from. See `SECURITY.md`, "Login throttling".
+`--no-proxy-headers` makes uvicorn keep the TCP peer as `request.client` instead of rewriting it from `X-Forwarded-For`. The login throttle counts failed attempts per client address after a failed verification, and uvicorn's default trusts that header from loopback, which is where the Vite proxy connects from. See `SECURITY.md`, "Login throttling".
 
 - API root: `http://127.0.0.1:8000/api/v1`
 - Interactive docs: `http://127.0.0.1:8000/api/docs`
