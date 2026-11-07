@@ -1204,6 +1204,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 1000000,
               "minimum": 0,
               "default": 0,
               "title": "Offset"
@@ -1645,6 +1646,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 1000000,
               "minimum": 0,
               "default": 0,
               "title": "Offset"
@@ -1837,6 +1839,102 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/production-orders/status-counts": {
+      "get": {
+        "tags": [
+          "production"
+        ],
+        "summary": "Order Status Counts",
+        "operationId": "order_status_counts_api_v1_production_orders_status_counts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderStatusCounts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database not reachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role not permitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Entity not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with existing data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/v1/production-orders/{order_id}": {
@@ -2226,6 +2324,25 @@
             }
           },
           {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BatchStatus"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -2243,6 +2360,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 1000000,
               "minimum": 0,
               "default": 0,
               "title": "Offset"
@@ -2832,6 +2950,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 1000000,
               "minimum": 0,
               "default": 0,
               "title": "Offset"
@@ -3279,6 +3398,25 @@
         ],
         "parameters": [
           {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InvestigationStatus"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -3296,6 +3434,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 1000000,
               "minimum": 0,
               "default": 0,
               "title": "Offset"
@@ -4387,6 +4526,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 1000000,
               "minimum": 0,
               "default": 0,
               "title": "Offset"
@@ -4590,25 +4730,8 @@
           "analytics"
         ],
         "summary": "Check Overdue Orders",
-        "description": "Raise ORDER_OVERDUE alerts for open orders past their due date; safe to repeat.",
+        "description": "Raise ORDER_OVERDUE alerts for open orders past their due date; safe to repeat.\n\nThe check takes no body: due dates are judged against the server clock,\nso a client cannot choose the check date. Replaying a past check is a\ncommand line operation (``app.jobs.check_overdue_orders --as-of``).",
         "operationId": "check_overdue_orders_api_v1_analytics_alerts_checks_overdue_orders_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/OverdueCheckRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Body"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -5982,25 +6105,39 @@
         ],
         "title": "OrderStatus"
       },
-      "OverdueCheckRequest": {
+      "OrderStatusCounts": {
         "properties": {
-          "as_of": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "As Of",
-            "description": "Moment the due dates are judged against; defaults to the server clock"
+          "PLANNED": {
+            "type": "integer",
+            "title": "Planned"
+          },
+          "RELEASED": {
+            "type": "integer",
+            "title": "Released"
+          },
+          "IN_PROGRESS": {
+            "type": "integer",
+            "title": "In Progress"
+          },
+          "COMPLETED": {
+            "type": "integer",
+            "title": "Completed"
+          },
+          "CANCELLED": {
+            "type": "integer",
+            "title": "Cancelled"
           }
         },
-        "additionalProperties": false,
         "type": "object",
-        "title": "OverdueCheckRequest"
+        "required": [
+          "PLANNED",
+          "RELEASED",
+          "IN_PROGRESS",
+          "COMPLETED",
+          "CANCELLED"
+        ],
+        "title": "OrderStatusCounts",
+        "description": "Number of production orders in each status; one key per ``OrderStatus`` value."
       },
       "OverdueCheckResponse": {
         "properties": {
@@ -6383,6 +6520,10 @@
             "type": "integer",
             "title": "Production Order Id"
           },
+          "order_number": {
+            "type": "string",
+            "title": "Order Number"
+          },
           "machine_id": {
             "type": "integer",
             "title": "Machine Id"
@@ -6435,6 +6576,7 @@
           "id",
           "batch_number",
           "production_order_id",
+          "order_number",
           "machine_id",
           "quantity",
           "status",
