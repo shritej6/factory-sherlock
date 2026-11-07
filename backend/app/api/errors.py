@@ -20,10 +20,10 @@ from sqlalchemy.exc import DataError, IntegrityError, OperationalError, TimeoutE
 
 from app.api.request_id import REQUEST_ID_HEADER, request_id_of
 from app.core.exceptions import AppError, RateLimitedError
+from app.core.mysql_errors import MYSQL_DUPLICATE_KEY, driver_args, mysql_error_code
 
 logger = logging.getLogger(__name__)
 
-MYSQL_DUPLICATE_KEY = 1062
 MYSQL_FK_VIOLATION = 1452
 MYSQL_DATA_TOO_LONG = 1406
 MYSQL_CHECK_VIOLATION = 3819
@@ -44,20 +44,8 @@ class ErrorMapping:
     log_message: str = "database error"
 
 
-def _driver_args(exc: Exception) -> tuple[object, ...]:
-    """The (errno, message) pair pymysql attaches to the wrapped driver error."""
-    orig = getattr(exc, "orig", None)
-    args = getattr(orig, "args", ())
-    return tuple(args) if isinstance(args, tuple) else ()
-
-
-def mysql_error_code(exc: Exception) -> int | None:
-    args = _driver_args(exc)
-    return args[0] if args and isinstance(args[0], int) else None
-
-
 def _mysql_message(exc: Exception) -> str:
-    args = _driver_args(exc)
+    args = driver_args(exc)
     return str(args[1]) if len(args) > 1 else ""
 
 

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.clock import now
 from app.core.exceptions import ConflictError, NotFoundError
+from app.core.mysql_errors import MYSQL_DUPLICATE_KEY, mysql_error_code
 from app.domain.state_machines import MACHINE_TRANSITIONS, assert_transition
 from app.models import (
     DefectType,
@@ -27,11 +28,14 @@ def _flush_or_conflict(session: Session, what: str) -> None:
 
     The unique constraint is the real guard against duplicates (two concurrent
     requests cannot both succeed); this just turns its failure into a clean
-    client error.
+    client error. Any other integrity failure (a missing parent row, a CHECK
+    constraint) is not a duplicate and is left to the API error handlers.
     """
     try:
         session.flush()
     except IntegrityError as exc:
+        if mysql_error_code(exc) != MYSQL_DUPLICATE_KEY:
+            raise
         raise ConflictError(f"{what} already exists") from exc
 
 

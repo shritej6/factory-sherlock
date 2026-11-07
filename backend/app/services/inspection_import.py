@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.clock import now
 from app.core.database import Base
 from app.core.exceptions import ValidationError
+from app.core.mysql_errors import MYSQL_DUPLICATE_KEY, mysql_error_code
 from app.domain.quality_rules import Evaluation, evaluate_measurement
 from app.models import (
     DefectType,
@@ -51,7 +52,6 @@ logger = logging.getLogger(__name__)
 # some gauge software send application/octet-stream, accepted only with a .csv name.
 ACCEPTED_CONTENT_TYPES = frozenset({"text/csv", "application/csv", "application/vnd.ms-excel"})
 BULK_CHUNK_SIZE = 1000
-MYSQL_DUPLICATE_KEY = 1062
 INVALID_ROWS_MESSAGE = "The file was not imported because some rows are invalid"
 RACE_MESSAGE = "Another import recorded this unit and characteristic first"
 
@@ -265,7 +265,7 @@ def _write_inspections(session: Session, plans: list[_Planned]) -> list[int]:
         with session.begin_nested():
             return _insert_plans(session, plans)
     except IntegrityError as exc:
-        if _mysql_error_code(exc) != MYSQL_DUPLICATE_KEY:
+        if mysql_error_code(exc) != MYSQL_DUPLICATE_KEY:
             raise
         race = _race_error(session, plans)
         if race is None:
@@ -316,8 +316,3 @@ def _race_error(session: Session, plans: list[_Planned]) -> ValidationError | No
     if not errors:
         return None
     return import_error(INVALID_ROWS_MESSAGE, errors)
-
-
-def _mysql_error_code(exc: IntegrityError) -> int | None:
-    args = getattr(exc.orig, "args", ())
-    return args[0] if args and isinstance(args[0], int) else None
