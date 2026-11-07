@@ -3,7 +3,7 @@
 flowchart TD
     A["Alert or dashboard shows a high defect rate"] --> B["Engineer opens an investigation:<br/>title, machine (optional), window"]
     B --> C["Service validates window and machine"]
-    C --> D["Rules R1 to R6 run in order<br/>against database/queries SQL"]
+    C --> D["Rules R1 to R7 run in order<br/>against database/queries SQL"]
     D --> E["Evidence cards: narrative + SQL + rows"]
     D --> F["Summary built from context<br/>(no causal claims)"]
     E --> G["Investigation stored OPEN with evidence<br/>and links to batches above 10%"]

@@ -6,7 +6,7 @@ WINDOW = {"window_start": "2026-11-01T00:00:00", "window_end": "2026-11-05T00:00
 def test_query_catalog_lists_every_sql_file(client: TestClient, viewer: dict[str, str]) -> None:
     catalog = client.get("/api/v1/analytics/queries", headers=viewer).json()
     names = {q["name"] for q in catalog}
-    assert len(catalog) == 13
+    assert len(catalog) == 14
     assert "order_completion_summary" in names and "investigation.defect_onset" in names
     assert all(
         q["description"].startswith("Query") or "Investigation" in q["description"] for q in catalog

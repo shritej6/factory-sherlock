@@ -52,10 +52,11 @@ def test_tokens_round_trip_and_reject_tampering(monkeypatch: pytest.MonkeyPatch)
 
 def test_sql_catalog_contains_every_documented_query() -> None:
     names = query_names()
-    assert len(names) == 13
+    assert len(names) == 14
     assert "machine_defect_rate_comparison" in names
     assert "characteristic_control_chart" in names
     assert "investigation.shared_material_lots" in names
+    assert "investigation.hourly_defect_rates" in names
     assert load_sql("unit_backward_trace").startswith("-- Query 05")
     assert load_sql("characteristic_control_chart").startswith("-- Query 10")
     clause = load_query("investigation.shared_material_lots", expanding=("batch_ids",))

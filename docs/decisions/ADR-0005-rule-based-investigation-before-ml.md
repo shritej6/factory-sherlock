@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Recorded 2026-11-03. Implemented in `backend/app/investigation/`.
+Accepted. Recorded 2026-11-03. Implemented in `backend/app/investigation/`. Amended by [ADR-0009](ADR-0009-cusum-onset-rule.md), which adds a seventh rule (R7, CUSUM onset detection) within the same design; the six rules listed below are unchanged.
 
 ## Context
 

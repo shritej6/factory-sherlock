@@ -94,7 +94,9 @@ def test_valid_file_is_imported_with_the_same_rules_as_manual_entry(
     assert body["imported"] == 5 and body["failed_inspections"] == 3
     assert len(body["inspection_ids"]) == 5 and len(set(body["inspection_ids"])) == 5
 
-    listed = {i["id"]: i for i in client.get("/api/v1/inspections", headers=operator).json()["items"]}
+    listed = {
+        i["id"]: i for i in client.get("/api/v1/inspections", headers=operator).json()["items"]
+    }
     assert set(listed) == set(body["inspection_ids"])
     by_order = [listed[i] for i in body["inspection_ids"]]
     assert [i["result"] for i in by_order] == ["PASS", "FAIL", "FAIL", "PASS", "FAIL"]
@@ -287,7 +289,7 @@ def test_sample_file_imports_against_the_demo_scenario(
     assert run.status_code == 201, run.text
     orders = client.get(
         "/api/v1/production-orders", params={"status": "IN_PROGRESS"}, headers=engineer
-    ).json()
+    ).json()["items"]
     assert [o["order_number"] for o in orders] == ["SIM0001-CNC-02-02"]
     batch = client.post(
         "/api/v1/production-batches",
