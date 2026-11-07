@@ -10,9 +10,9 @@ Graded milestone documents for CS3320 (Dr. Chibuzo Ukegbu). Markdown is the sour
 | Week 8 milestone report | week08-milestone-report.md | week08-milestone-report.docx, week08-milestone-report.pdf |
 | Week 9 environment and repository check | week09-milestone-report.md | week09-milestone-report.docx, week09-milestone-report.pdf |
 | Week 10 database and query defense | week10-milestone-report.md | week10-milestone-report.docx, week10-milestone-report.pdf |
-| Week 12 back end, rules, and security | week12-milestone-report.md (to be written) | |
-| Week 13 front end and integration | week13-milestone-report.md (to be written) | |
-| Week 14 testing and readiness | week14-milestone-report.md (to be written) | |
+| Week 12 back end, rules, and security | week12-milestone-report.md | week12-milestone-report.docx, week12-milestone-report.pdf |
+| Week 13 front end and integration | week13-milestone-report.md | week13-milestone-report.docx, week13-milestone-report.pdf |
+| Week 14 testing and readiness | week14-milestone-report.md | week14-milestone-report.docx, week14-milestone-report.pdf |
 
 Every report follows the seven standard sections from the assignment (completion status and blockers; technical artifacts and commit or tag; decisions, alternatives, assumptions, constraints, and rationale; AI help and verification; lessons learned; support needed; next-step plan) followed by a personal reflection and a personal-work summary. Bracketed prompts such as "[Describe ...]" must be replaced with the student's own words before submission; the build script warns when brackets remain.
 
