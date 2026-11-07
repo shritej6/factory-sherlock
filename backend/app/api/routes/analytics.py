@@ -4,9 +4,14 @@ from fastapi import APIRouter, Query
 
 from app.api.deps import CurrentUser, DbSession, Operator
 from app.core.clock import now
-from app.schemas.analytics import QueryCatalogEntry, QueryResult
+from app.schemas.analytics import (
+    OverdueCheckRequest,
+    OverdueCheckResponse,
+    QueryCatalogEntry,
+    QueryResult,
+)
 from app.schemas.investigation import AlertRead
-from app.services import analytics_service
+from app.services import alert_service, analytics_service
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -59,4 +64,18 @@ def recent_alerts(
 def acknowledge_alert(session: DbSession, user: Operator, alert_id: int) -> AlertRead:
     return AlertRead.model_validate(
         analytics_service.acknowledge_alert(session, alert_id, user_id=user.id)
+    )
+
+
+@router.post("/alerts/checks/overdue-orders", response_model=OverdueCheckResponse)
+def check_overdue_orders(
+    session: DbSession, _: Operator, body: OverdueCheckRequest | None = None
+) -> OverdueCheckResponse:
+    """Raise ORDER_OVERDUE alerts for open orders past their due date; safe to repeat."""
+    as_of = body.as_of if body is not None else None
+    result = alert_service.raise_overdue_order_alerts(session, as_of=as_of)
+    return OverdueCheckResponse(
+        checked=result.checked,
+        raised=result.raised,
+        alerts=[AlertRead.model_validate(a) for a in result.alerts],
     )

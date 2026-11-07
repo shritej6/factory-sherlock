@@ -13,7 +13,8 @@ UV := uv
 PNPM := pnpm
 
 .PHONY: help db-init db-start db-stop migrate seed seed-demo reset-demo backend frontend \
-	test-backend test-frontend lint format export-schema export-openapi render-diagrams render-figures check-docs
+	test-backend test-frontend lint format export-schema export-openapi render-diagrams render-figures check-docs \
+	check-overdue
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | sort | awk -F ':.*## ' '{ printf "  %-16s %s\n", $$1, $$2 }'
@@ -38,6 +39,9 @@ seed-demo: ## Load reference data, demo accounts, and run the demo simulation sc
 
 reset-demo: ## Drop all tables, re-run migrations, and seed the demo scenario
 	cd $(BACKEND_DIR) && $(UV) run python ../scripts/development/reset_database.py --demo
+
+check-overdue: ## Raise ORDER_OVERDUE alerts for open production orders past their due date
+	cd $(BACKEND_DIR) && $(UV) run python -m app.jobs.check_overdue_orders
 
 backend: ## Run the FastAPI server with reload
 	cd $(BACKEND_DIR) && $(UV) run uvicorn app.main:app --reload

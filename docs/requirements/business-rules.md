@@ -2,7 +2,7 @@
 
 Every rule the system enforces, with the layer that enforces it. Enforcement layers:
 
-- MySQL constraint: declared in the Alembic migration (`backend/migrations/versions/20261104_0106_create_manufacturing_schema.py`) and visible in `database/schema/schema.sql`. Holds even for rows written outside the application.
+- MySQL constraint: declared in the Alembic migrations under `backend/migrations/versions/` and visible in `database/schema/schema.sql`. Holds even for rows written outside the application.
 - Domain state machine: transition tables in `backend/app/domain/state_machines.py`, applied through `assert_transition`, which raises `InvalidTransitionError` (HTTP 422).
 - Service check: Python logic in `backend/app/services/*.py` that raises `ValidationError` (422), `NotFoundError` (404), or `ConflictError` (409).
 - Schema validation: Pydantic models in `backend/app/schemas/*.py`; failures return 422 with per-field messages.
@@ -125,8 +125,20 @@ Where a rule is enforced at more than one layer, all layers are listed; the firs
 | BR-94 | Simulated state transitions obey `MACHINE_TRANSITIONS`. | Domain state machine (`MachineStateTracker.transition`) |
 | BR-95 | All simulated rows are written in one transaction. | Service check plus request transaction |
 
+## Overdue order alerts
+
+The check runs on demand through `POST /api/v1/analytics/alerts/checks/overdue-orders` (Operator role set) and through `uv run python -m app.jobs.check_overdue_orders` (`make check-overdue`). Both call `alert_service.raise_overdue_order_alerts`.
+
+| ID | Rule | Enforced by |
+|----|------|-------------|
+| BR-100 | An order is overdue when its `due_date` is before the check date (`as_of`, default the server clock) and its status is PLANNED, RELEASED, or IN_PROGRESS. COMPLETED and CANCELLED orders and orders without a due date are never overdue; an order due on the check date is not yet overdue. | Service check (`alert_service.overdue_orders`, `OPEN_ORDER_STATES`, `days_late`) |
+| BR-101 | Each overdue order gets one ORDER_OVERDUE alert linked through `alerts.production_order_id`, carrying the order's `machine_id` when it has one and `created_at` equal to `as_of`. | Service check (`raise_overdue_order_alerts`); MySQL constraint (`fk_alerts_production_order`) |
+| BR-102 | Severity is WARNING when the order is 1 to 2 days late and CRITICAL from the third day. The message is `Order <order_number> is <n> day(s) overdue (due <due_date>)`. | Service check (`overdue_severity`, `CRITICAL_AFTER_DAYS`, `overdue_message`) |
+| BR-103 | The check is idempotent: an order that already has an unacknowledged ORDER_OVERDUE alert gets no new one, however often the check runs. After that alert is acknowledged, the next check raises a fresh alert (with the current days late and severity) if the order is still overdue. | Service check (`_orders_with_open_alert`) |
+| BR-104 | Deleting an order keeps its alerts and clears the link; the alert text still names the order number. | MySQL constraint (`alerts.production_order_id` ON DELETE SET NULL) |
+
 ## Rules stated in the brief but not enforced in code
 
 - Material consumption is not reconciled: `quantity_used` may exceed `quantity_received`, and lots are never marked CONSUMED.
 - Two simulation faults on the same machine and batch index are not rejected; the last one listed wins.
-- Order `due_date` is informational; nothing prevents completing an order late, and the ORDER_OVERDUE alert type is never raised by the application (the `production_performance` query labels overdue orders instead).
+- Order `due_date` does not block anything: nothing prevents completing an order late. Overdue orders are reported by the ORDER_OVERDUE check (BR-100 to BR-104) and labelled by the `production_performance` query; neither changes the order.

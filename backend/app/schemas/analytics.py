@@ -1,6 +1,9 @@
+from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas.investigation import AlertRead
 
 
 class QueryCatalogEntry(BaseModel):
@@ -20,3 +23,20 @@ class QueryResult(BaseModel):
     sql: str
     params: dict[str, Any]
     rows: list[dict[str, Any]]
+
+
+class OverdueCheckRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    as_of: datetime | None = Field(
+        default=None,
+        description="Moment the due dates are judged against; defaults to the server clock",
+    )
+
+
+class OverdueCheckResponse(BaseModel):
+    """Outcome of one overdue order check: how many orders were overdue and what was raised."""
+
+    checked: int
+    raised: int
+    alerts: list[AlertRead]
