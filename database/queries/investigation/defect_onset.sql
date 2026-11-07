@@ -9,6 +9,17 @@
 --   Hours with no inspections produce no row, so previous_bucket_rate is the
 --   rate of the previous non-empty hour (LAG over the rows that exist), not
 --   necessarily the rate of the clock hour before.
+-- Used by: rule R3 (defect-rate onset); the four-day investigation window.
+-- Performance: EXPLAIN at demo volume (1,400 inspections, 35 batches) with
+--   :machine_id = 3 reads production_batches by ref on
+--   ix_production_batches_machine_time (12 rows, "Using index; Using
+--   temporary"), units by ref on uq_unit_batch_sequence (20 per batch, "Using
+--   index"), and inspections by ref on uq_inspection_unit_spec (2 per unit)
+--   with the time filter as "Using where"; ix_inspections_time_result,
+--   ix_inspections_time_id, and ix_inspections_spec_time are in possible_keys
+--   but not chosen because the machine filter is the selective predicate.
+--   The CTE groups 480 inspections (240 units of CNC-03) into 7 hour buckets,
+--   and the LAG and SUM window functions run over those 7 rows.
 WITH hourly AS (
     SELECT
         DATE_FORMAT(i.inspected_at, '%Y-%m-%dT%H:00:00') AS bucket_start,

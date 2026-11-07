@@ -100,7 +100,7 @@ A request to manufacture a quantity of one product.
 | quantity_completed | int | NO | none (ORM: 0) | CHECK `ck_order_quantity_completed_non_negative` (`>= 0`); CHECK `ck_order_completed_within_planned` (`<= quantity_planned`) | Units completed so far; maintained by `complete_batch` and simulation persistence |
 | status | enum('PLANNED','RELEASED','IN_PROGRESS','COMPLETED','CANCELLED') | NO | none (ORM: PLANNED) | index `ix_production_orders_status` | Workflow state; transitions governed by `ORDER_TRANSITIONS` |
 | due_date | date | YES | NULL | | Target completion date |
-| created_at | datetime | NO | (now()) | | Row creation time (the simulation sets it explicitly to the simulated time) |
+| created_at | datetime | NO | (now()) | leading column of `ix_production_orders_created_id (created_at, id)` | Row creation time (the simulation sets it explicitly to the simulated time); the index matches the `created_at DESC, id DESC` ordering of the order list |
 | updated_at | datetime | NO | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | | Set on insert and refreshed by MySQL on every update, including raw SQL; the ORM also sets it on the updates it issues |
 
 ## production_batches
@@ -115,7 +115,7 @@ A run of units for one order on one machine.
 | machine_id | int | NO | none | FK `machines.id` ON DELETE RESTRICT; leading column of `ix_production_batches_machine_time` | Machine that ran the batch |
 | quantity | int | NO | none | CHECK `ck_batch_quantity_positive` (`> 0`) | Units in the batch; equals the number of `production_units` rows created with it |
 | status | enum('IN_PROGRESS','COMPLETED','QUARANTINED') | NO | none (ORM: IN_PROGRESS) | CHECK `ck_batch_completed_has_time` (`status <> 'COMPLETED' OR completed_at IS NOT NULL`); CHECK `ck_batch_quarantine_reason` (`(status = 'QUARANTINED') = (quarantine_reason IS NOT NULL)`) | Transitions governed by `BATCH_TRANSITIONS` |
-| started_at | datetime | NO | none | second column of `ix_production_batches_machine_time` | Start time |
+| started_at | datetime | NO | none | second column of `ix_production_batches_machine_time`; leading column of `ix_production_batches_started_id (started_at, id)` | Start time; the second index matches the `started_at DESC, id DESC` ordering of the batch list |
 | completed_at | datetime | YES | NULL | CHECK `ck_batch_completed_after_start` (`completed_at IS NULL OR completed_at >= started_at`); see `ck_batch_completed_has_time` | Set when the batch completes; required for `COMPLETED` and kept when a completed batch is later quarantined |
 | quarantine_reason | varchar(255) | YES | NULL | see `ck_batch_quarantine_reason` | Set when the batch is quarantined, directly or through a lot quarantine; present exactly when `status = 'QUARANTINED'` |
 
@@ -160,10 +160,10 @@ One measurement of one unit against one specification.
 |--------|------------|------|---------|-------------|-------------|
 | id | int | NO | AUTO_INCREMENT | PRIMARY KEY | Surrogate key |
 | unit_id | int | NO | none | FK `production_units.id` ON DELETE RESTRICT; leading column of UNIQUE `uq_inspection_unit_spec` | Inspected unit; inspections block deletion of the unit |
-| specification_id | int | NO | none | FK `product_specifications.id` ON DELETE RESTRICT; part of UNIQUE `uq_inspection_unit_spec`; implicit index `specification_id` | Characteristic checked |
+| specification_id | int | NO | none | FK `product_specifications.id` ON DELETE RESTRICT; part of UNIQUE `uq_inspection_unit_spec`; leading column of `ix_inspections_spec_time (specification_id, inspected_at)`, which also backs the foreign key (the implicit `specification_id` index was replaced by revision `6c1f0d2a9b47`) | Characteristic checked |
 | measured_value | decimal(10,3) | NO | none | | Measured value in the specification's unit |
 | result | enum('PASS','FAIL') | NO | none | second column of `ix_inspections_time_result` | Stored outcome computed from the specification at inspection time |
-| inspected_at | datetime | NO | none | leading column of `ix_inspections_time_result` | Inspection time |
+| inspected_at | datetime | NO | none | leading column of `ix_inspections_time_result` and of `ix_inspections_time_id (inspected_at, id)`; second column of `ix_inspections_spec_time` | Inspection time; `ix_inspections_time_id` matches the `inspected_at DESC, id DESC` ordering of the inspection list |
 
 ## inspection_defects
 
@@ -206,7 +206,7 @@ A quality investigation over a time window.
 | summary | text | YES | NULL | | Written by the rule engine at creation |
 | conclusion | text | YES | NULL | | Written by an engineer; required to close |
 | opened_by | int | YES | NULL | FK `users.id` ON DELETE SET NULL; implicit index `opened_by` | Creating user |
-| created_at | datetime | NO | (now()) | | Creation time |
+| created_at | datetime | NO | (now()) | leading column of `ix_investigations_created_id (created_at, id)` | Creation time; the index matches the `created_at DESC, id DESC` ordering of the investigation list |
 | closed_at | datetime | YES | NULL | see `ck_investigation_closed` | Set when status becomes `CLOSED`; present exactly then |
 
 ## investigation_evidence

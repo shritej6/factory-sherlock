@@ -13,6 +13,14 @@
 --   rows in Python; the SQL itself returns only the counts and the rate.
 -- Used by: rule R7 (CUSUM onset detection). Rule R3 uses defect_onset.sql,
 --   which buckets the same way but adds LAG and cumulative columns.
+-- Performance: same FROM and WHERE as defect_onset.sql, so the same plan:
+--   EXPLAIN at demo volume (1,400 inspections, 35 batches) with :machine_id
+--   = 3 reads production_batches by ref on ix_production_batches_machine_time
+--   (12 rows, "Using index; Using temporary"), units by ref on
+--   uq_unit_batch_sequence (20 per batch), and inspections by ref on
+--   uq_inspection_unit_spec (2 per unit) with the time filter as "Using
+--   where". 480 inspections are grouped into 7 hour buckets; without the LAG
+--   and SUM window functions there is no second pass over the grouped rows.
 SELECT
     DATE_FORMAT(i.inspected_at, '%Y-%m-%dT%H:00:00')     AS bucket_start,
     COUNT(i.id)                                           AS inspected_count,

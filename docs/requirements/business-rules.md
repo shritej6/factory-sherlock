@@ -72,7 +72,7 @@ Where a rule is enforced at more than one layer, all layers are listed; the firs
 | BR-55 | Order status change, batch, material links, and units are written atomically. | Service check plus request transaction (`core/database.get_db_session`) |
 | BR-56 | Batch status transitions: IN_PROGRESS to COMPLETED or QUARANTINED; COMPLETED to QUARANTINED; QUARANTINED is terminal. | Domain state machine (`BATCH_TRANSITIONS`) via `complete_batch`, `quarantine_batch` |
 | BR-57 | Completing a batch sets `completed_at` and adds its quantity to the order; it is refused if that would exceed the planned quantity. | Service check (`complete_batch`, 409); MySQL constraint (`ck_order_completed_within_planned`) |
-| BR-58 | Deleting a batch removes its units, material links, and investigation links; a batch cannot be deleted while referenced otherwise (no delete endpoint exists). | MySQL constraint (CASCADE on `production_units`, `batch_materials`, `investigation_batches`) |
+| BR-58 | A batch cannot be deleted while it has units, material links, or investigation links; the database refuses the delete rather than removing dependent history (no delete endpoint exists). | MySQL constraint (ON DELETE RESTRICT on `production_units.batch_id`, `batch_materials.batch_id`, `investigation_batches.batch_id`) |
 
 ## Quality
 

@@ -41,6 +41,7 @@ class ProductionOrder(TimestampMixin, Base):
             "quantity_completed <= quantity_planned", name="ck_order_completed_within_planned"
         ),
         Index("ix_production_orders_status", "status"),
+        Index("ix_production_orders_created_id", "created_at", "id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -89,6 +90,7 @@ class ProductionBatch(Base):
         ),
         Index("ix_production_batches_machine_time", "machine_id", "started_at"),
         Index("ix_production_batches_order", "production_order_id"),
+        Index("ix_production_batches_started_id", "started_at", "id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

@@ -30,10 +30,12 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
       - ./scripts/setup/init_databases.sh:/docker-entrypoint-initdb.d/01_init.sh:ro
+    # sql-mode is the MySQL 8.4 default, written out so a my.cnf on the host
+    # cannot weaken it; every catalog query passes with ONLY_FULL_GROUP_BY.
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_0900_ai_ci
-      --sql-mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
+      --sql-mode=ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
     healthcheck:
       # TCP on 127.0.0.1 only answers once the entrypoint has finished the init
       # scripts and started the real server, so "healthy" means "initialised".
