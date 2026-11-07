@@ -5,10 +5,14 @@ from decimal import Decimal
 
 import pytest
 from app.core.database import SessionLocal, engine
+from app.core.exceptions import ConflictError
 from app.models import (
+    Investigation,
+    InvestigationEvidence,
     Machine,
     MachineEvent,
     MachineEventType,
+    MaterialLot,
     OrderStatus,
     Product,
     ProductionBatch,
@@ -181,6 +185,86 @@ def test_complete_batch_increments_quantity_atomically(db_session: Session) -> N
         select(ProductionOrder.quantity_completed).where(ProductionOrder.id == order.id)
     )
     assert stored == 6
+
+
+def test_completing_a_batch_beyond_the_planned_quantity_is_a_conflict(db_session: Session) -> None:
+    """The service refuses before ck_order_completed_within_planned would fire."""
+    order = _in_progress_order(db_session, "PO-OVR")
+    batch = _batch_with_units(db_session, order, 4)
+    db_session.execute(
+        text("UPDATE production_orders SET quantity_completed = 7 WHERE id = :id"), {"id": order.id}
+    )
+    db_session.commit()
+    db_session.expire_all()  # a request would load the order fresh; 7 + 4 exceeds 10
+    with pytest.raises(ConflictError, match="exceed the order's planned quantity"):
+        production_service.complete_batch(db_session, batch.id)
+    db_session.rollback()
+    stored = db_session.execute(
+        text("SELECT status, completed_at FROM production_batches WHERE id = :id"), {"id": batch.id}
+    ).one()
+    assert tuple(stored) == ("IN_PROGRESS", None)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        # BR-01: usernames and emails are unique.
+        "INSERT INTO users (username, email, password_hash, role, is_active) VALUES ('engineer', 'x@example.com', 'h', 'VIEWER', 1)",
+        "INSERT INTO users (username, email, password_hash, role, is_active) VALUES ('someone', 'engineer@example.com', 'h', 'VIEWER', 1)",
+        # BR-10: product, machine, and lot codes are unique.
+        "INSERT INTO products (code, name) VALUES ('GEAR', 'again')",
+        "INSERT INTO machines (code, name, status) VALUES ('CNC-01', 'again', 'IDLE')",
+        "INSERT INTO material_lots (lot_number, material_name, supplier, quantity_received, status, received_at) VALUES ('L201', 'm', 's', 1, 'AVAILABLE', '2026-01-01')",
+        # BR-11: one characteristic per product.
+        "INSERT INTO product_specifications (product_id, characteristic, target_value, tolerance, unit) SELECT id, 'diameter', 1, 1, 'mm' FROM products WHERE code = 'STEEL-SHAFT'",
+        # BR-16: defect type codes are unique.
+        "INSERT INTO defect_types (code, name) VALUES ('SURFACE_DAMAGE', 'again')",
+    ],
+)
+def test_reference_unique_constraints_reject_duplicates(
+    db_session: Session, statement: str
+) -> None:
+    with pytest.raises(IntegrityError):
+        db_session.execute(text(statement))
+    db_session.rollback()
+
+
+def test_unit_serials_sequences_evidence_and_lot_links_are_unique(db_session: Session) -> None:
+    order = _in_progress_order(db_session, "PO-UNQ")
+    batch = _batch_with_units(db_session, order, 2)
+    lot_id = db_session.scalar(select(MaterialLot.id).where(MaterialLot.lot_number == "L401"))
+    db_session.execute(
+        text("INSERT INTO batch_materials VALUES (:b, :lot, 1.00)"), {"b": batch.id, "lot": lot_id}
+    )
+    investigation = Investigation(
+        title="Unique", window_start=datetime(2026, 1, 1), window_end=datetime(2026, 1, 2)
+    )
+    investigation.evidence = [
+        InvestigationEvidence(
+            sequence=1,
+            rule_code="R1",
+            title="t",
+            narrative="n",
+            query_name="q",
+            query_sql="SELECT 1",
+            result_rows={"columns": [], "rows": []},
+        )
+    ]
+    db_session.add(investigation)
+    db_session.commit()
+    duplicates = [
+        # BR-54: serial numbers and the sequence within a batch are unique.
+        f"INSERT INTO production_units (batch_id, serial_number, sequence_in_batch, produced_at) VALUES ({batch.id}, 'PO-UNQ-B01-U0001', 9, '2026-01-01')",
+        f"INSERT INTO production_units (batch_id, serial_number, sequence_in_batch, produced_at) VALUES ({batch.id}, 'OTHER', 1, '2026-01-01')",
+        # BR-80: one link per batch and lot pair.
+        f"INSERT INTO batch_materials VALUES ({batch.id}, {lot_id}, 2.00)",
+        # BR-72: evidence sequence is unique per investigation.
+        f"INSERT INTO investigation_evidence (investigation_id, sequence, rule_code, title, narrative, query_name, query_sql, result_rows) VALUES ({investigation.id}, 1, 'R2', 't', 'n', 'q', 'SELECT 1', '{{}}')",
+    ]
+    for statement in duplicates:
+        with pytest.raises(IntegrityError):
+            db_session.execute(text(statement))
+        db_session.rollback()
 
 
 def test_decimal_precision_is_preserved(db_session: Session) -> None:

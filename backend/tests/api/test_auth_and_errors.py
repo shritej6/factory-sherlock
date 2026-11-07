@@ -1,6 +1,62 @@
+import pytest
+from app.models import User, UserRole
 from fastapi.testclient import TestClient
+from sqlalchemy import update
+from sqlalchemy.orm import Session
 
 from tests.conftest import TEST_PASSWORD
+
+REASON = {"reason": "long enough reason"}
+ENGINEER_ONLY_ROUTES = [
+    ("POST", "/api/v1/products", {"code": "NEW-1", "name": "n"}),
+    ("PATCH", "/api/v1/products/1", {"name": "n"}),
+    ("POST", "/api/v1/machines", {"code": "CNC-09", "name": "n"}),
+    (
+        "POST",
+        "/api/v1/material-lots",
+        {
+            "lot_number": "L9",
+            "material_name": "m",
+            "supplier": "s",
+            "quantity_received": "1",
+            "received_at": "2026-01-01T00:00:00",
+        },
+    ),
+    (
+        "POST",
+        "/api/v1/production-orders",
+        {"order_number": "PO-9", "product_id": 1, "quantity_planned": 1},
+    ),
+    ("PATCH", "/api/v1/production-orders/1", {"due_date": "2026-12-01"}),
+    ("POST", "/api/v1/production-batches/1/quarantine", REASON),
+    ("POST", "/api/v1/traceability/material-lots/1/quarantine", REASON),
+    (
+        "POST",
+        "/api/v1/investigations",
+        {
+            "title": "abc",
+            "window_start": "2026-11-01T00:00:00",
+            "window_end": "2026-11-02T00:00:00",
+        },
+    ),
+    ("POST", "/api/v1/simulation/runs", {"seed": 1, "start_time": "2026-11-01T00:00:00"}),
+]
+OPERATOR_ROUTES = [
+    ("POST", "/api/v1/machines/1/status", {"status": "RUNNING", "reason": "r"}),
+    ("POST", "/api/v1/production-orders/1/status", {"status": "RELEASED"}),
+    (
+        "POST",
+        "/api/v1/production-batches",
+        {
+            "production_order_id": 1,
+            "quantity": 1,
+            "materials": [{"material_lot_id": 1, "quantity_used": "1"}],
+        },
+    ),
+    ("POST", "/api/v1/production-batches/1/complete", None),
+    ("POST", "/api/v1/inspections", {"unit_id": 1, "specification_id": 1, "measured_value": "1"}),
+    ("POST", "/api/v1/analytics/alerts/1/acknowledge", None),
+]
 
 
 def test_health_round_trips_to_mysql(client: TestClient) -> None:
@@ -86,3 +142,62 @@ def test_unknown_user_login_takes_the_slow_path(client: TestClient) -> None:
     wrong = client.post("/api/v1/auth/login", json={"username": "viewer", "password": "bad"})
     assert missing.status_code == wrong.status_code == 401
     assert missing.json()["message"] == wrong.json()["message"]
+
+
+@pytest.mark.parametrize(("method", "path", "body"), ENGINEER_ONLY_ROUTES)
+def test_engineer_only_routes_reject_operators_and_viewers(
+    client: TestClient,
+    operator: dict[str, str],
+    viewer: dict[str, str],
+    method: str,
+    path: str,
+    body: dict[str, object] | None,
+) -> None:
+    for headers in (operator, viewer):
+        response = client.request(method, path, json=body, headers=headers)
+        assert response.status_code == 403, (path, response.text)
+        assert response.json()["details"]["required"] == ["ADMIN", "ENGINEER"]
+
+
+@pytest.mark.parametrize(("method", "path", "body"), OPERATOR_ROUTES)
+def test_operator_routes_reject_viewers_but_admit_operators(
+    client: TestClient,
+    operator: dict[str, str],
+    viewer: dict[str, str],
+    method: str,
+    path: str,
+    body: dict[str, object] | None,
+) -> None:
+    denied = client.request(method, path, json=body, headers=viewer)
+    assert denied.status_code == 403, (path, denied.text)
+    assert denied.json()["details"]["required"] == ["ADMIN", "ENGINEER", "OPERATOR"]
+    admitted = client.request(method, path, json=body, headers=operator)
+    assert admitted.status_code not in (401, 403), (path, admitted.text)
+
+
+def test_the_database_role_decides_not_the_token(
+    client: TestClient, viewer: dict[str, str], db_session: Session
+) -> None:
+    body = {"code": "CNC-09", "name": "Promoted"}
+    assert client.post("/api/v1/machines", json=body, headers=viewer).status_code == 403
+    db_session.execute(update(User).where(User.username == "viewer").values(role=UserRole.ENGINEER))
+    db_session.commit()
+    promoted = client.post("/api/v1/machines", json=body, headers=viewer)
+    assert promoted.status_code == 201, promoted.text
+    assert client.get("/api/v1/auth/me", headers=viewer).json()["role"] == "ENGINEER"
+
+
+def test_deactivated_users_lose_access_immediately(
+    client: TestClient, operator: dict[str, str], db_session: Session
+) -> None:
+    assert client.get("/api/v1/machines", headers=operator).status_code == 200
+    db_session.execute(update(User).where(User.username == "operator").values(is_active=False))
+    db_session.commit()
+    response = client.get("/api/v1/machines", headers=operator)
+    assert response.status_code == 401
+    assert response.json()["message"] == "User account is not active"
+    login = client.post(
+        "/api/v1/auth/login", json={"username": "operator", "password": TEST_PASSWORD}
+    )
+    assert login.status_code == 401
+    assert login.json()["message"] == "Invalid username or password"

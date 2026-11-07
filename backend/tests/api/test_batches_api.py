@@ -75,13 +75,66 @@ def test_batch_with_unavailable_lot_leaves_nothing_behind(
         headers=engineer,
     )
     assert response.status_code == 422
-    assert "QUARANTINED" in response.json()["message"]
+    assert "is QUARANTINED and cannot be used" in response.json()["message"]
     assert db_session.scalar(select(func.count(ProductionBatch.id))) == 0
     assert db_session.scalar(select(func.count(BatchMaterial.batch_id))) == 0
-    assert (
-        client.get(f"/api/v1/production-orders/{order_id}", headers=engineer).json()["status"]
-        == "RELEASED"
+    assert db_session.scalar(select(func.count(ProductionUnit.id))) == 0
+    order = client.get(f"/api/v1/production-orders/{order_id}", headers=engineer).json()
+    assert (order["status"], order["quantity_completed"]) == ("RELEASED", 0)
+
+
+def test_batch_numbers_serials_and_machine_follow_the_order(
+    client: TestClient, engineer: dict[str, str], ids: Ids, db_session: Session
+) -> None:
+    order_id = _released_order(client, engineer, ids)
+    first = client.post(
+        "/api/v1/production-batches", json=_batch_body(order_id, ids, qty=3), headers=engineer
+    ).json()
+    second = client.post(
+        "/api/v1/production-batches", json=_batch_body(order_id, ids, qty=2), headers=engineer
+    ).json()
+    assert (first["batch_number"], second["batch_number"]) == ("PO-2001-B01", "PO-2001-B02")
+    assert first["machine_id"] == second["machine_id"] == ids["machines"]["CNC-02"]
+    serials = db_session.scalars(
+        select(ProductionUnit.serial_number)
+        .where(ProductionUnit.batch_id == first["id"])
+        .order_by(ProductionUnit.sequence_in_batch)
+    ).all()
+    assert serials == ["PO-2001-B01-U0001", "PO-2001-B01-U0002", "PO-2001-B01-U0003"]
+
+
+def test_batch_needs_a_released_or_in_progress_order(
+    client: TestClient, engineer: dict[str, str], ids: Ids
+) -> None:
+    body = {
+        "order_number": "PO-PLANNED",
+        "product_id": ids["products"]["STEEL-SHAFT"],
+        "machine_id": ids["machines"]["CNC-01"],
+        "quantity_planned": 5,
+    }
+    order_id = client.post("/api/v1/production-orders", json=body, headers=engineer).json()["id"]
+    response = client.post(
+        "/api/v1/production-batches", json=_batch_body(order_id, ids, qty=5), headers=engineer
     )
+    assert response.status_code == 422
+    assert "is PLANNED; release it first" in response.json()["message"]
+
+
+def test_batch_material_inputs_are_validated_at_the_boundary(
+    client: TestClient, engineer: dict[str, str], ids: Ids
+) -> None:
+    order_id = _released_order(client, engineer, ids)
+    empty = {"production_order_id": order_id, "quantity": 1, "materials": []}
+    response = client.post("/api/v1/production-batches", json=empty, headers=engineer)
+    assert response.status_code == 422
+    assert [e["field"] for e in response.json()["details"]["errors"]] == ["materials"]
+    body = _batch_body(order_id, ids, qty=1)
+    body["materials"][0]["quantity_used"] = "1.005"
+    response = client.post("/api/v1/production-batches", json=body, headers=engineer)
+    assert response.status_code == 422
+    assert response.json()["details"]["errors"][0]["field"] == "materials.0.quantity_used"
+    body["materials"][0]["quantity_used"] = "0.01"
+    assert client.post("/api/v1/production-batches", json=body, headers=engineer).status_code == 201
 
 
 def test_batch_cannot_exceed_remaining_quantity(
@@ -176,6 +229,12 @@ def test_quarantine_batch_records_reason_and_alert(
     )
     alerts = client.get("/api/v1/analytics/alerts", headers=engineer).json()
     assert alerts[0]["alert_type"] == "MATERIAL_QUARANTINE"
+    assert alerts[0]["severity"] == "WARNING"
+    assert alerts[0]["machine_id"] == batch["machine_id"]
+    assert (
+        alerts[0]["message"]
+        == f"Batch {batch['batch_number']} quarantined: Oversize diameters found"
+    )
     # A quarantined batch cannot be completed.
     assert (
         client.post(

@@ -64,3 +64,33 @@ def test_alerts_can_be_acknowledged_once_by_operators(
         client.post("/api/v1/analytics/alerts/999999/acknowledge", headers=operator).status_code
         == 404
     )
+
+
+def test_quarantined_batches_drop_out_of_the_review_query(
+    client: TestClient,
+    engineer: dict[str, str],
+    ids: dict[str, dict[str, int]],
+    simulated: dict[str, object],
+) -> None:
+    params = {**WINDOW, "threshold": 0.10, "machine_id": ids["machines"]["CNC-03"]}
+    url = "/api/v1/analytics/queries/batches_requiring_review"
+    before = client.get(url, params=params, headers=engineer).json()["rows"]
+    assert len(before) >= 2
+    assert all(r["machine_code"] == "CNC-03" and r["defect_rate"] >= 0.10 for r in before)
+    assert all(r["already_under_investigation"] == 0 for r in before)
+    assert [r["defect_rate"] for r in before] == sorted(
+        (r["defect_rate"] for r in before), reverse=True
+    )
+    worst = before[0]
+    quarantined = client.post(
+        f"/api/v1/production-batches/{worst['batch_id']}/quarantine",
+        json={"reason": "Suspected tool wear"},
+        headers=engineer,
+    )
+    assert quarantined.status_code == 200
+    after = client.get(url, params=params, headers=engineer).json()["rows"]
+    assert {r["batch_id"] for r in after} == {r["batch_id"] for r in before} - {worst["batch_id"]}
+    other_machine = client.get(
+        url, params={**params, "machine_id": ids["machines"]["CNC-01"]}, headers=engineer
+    ).json()["rows"]
+    assert other_machine == []
