@@ -1,0 +1,160 @@
+# Docker Compose smoke test.
+#
+# Docker is not installed on the development machine, so this workflow is the
+# only place the docker-compose.yml path is executed. It starts the mysql
+# service from a .env built out of .env.example, checks as root inside the
+# container that init_databases.sh created both schemas and the least-privilege
+# user, then connects as that user from the runner over TCP. The passwords
+# below are fixed values for the disposable CI container only.
+name: Compose Smoke
+
+on:
+  push:
+    paths:
+      - "docker-compose.yml"
+      - "scripts/setup/**"
+      - ".env.example"
+      - ".github/workflows/compose-smoke.yml"
+  pull_request:
+    paths:
+      - "docker-compose.yml"
+      - "scripts/setup/**"
+      - ".env.example"
+      - ".github/workflows/compose-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compose-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Disposable credentials for the CI container; never used anywhere else.
+  MYSQL_ROOT_PASSWORD: ci-root-password
+  MYSQL_DATABASE: factory_sherlock
+  MYSQL_USER: sherlock_app
+  MYSQL_PASSWORD: ci-app-password
+  MYSQL_PORT: "3306"
+
+jobs:
+  compose:
+    name: Start mysql with compose and verify the init script
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Create .env for CI from .env.example
+        run: |
+          jwt_secret="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          cp .env.example .env
+          sed -i "s|^MYSQL_PORT=.*|MYSQL_PORT=${MYSQL_PORT}|" .env
+          sed -i "s|^MYSQL_DATABASE=.*|MYSQL_DATABASE=${MYSQL_DATABASE}|" .env
+          sed -i "s|^MYSQL_USER=.*|MYSQL_USER=${MYSQL_USER}|" .env
+          sed -i "s|^MYSQL_PASSWORD=.*|MYSQL_PASSWORD=${MYSQL_PASSWORD}|" .env
+          sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}|" .env
+          sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=${jwt_secret}|" .env
+          sed -i "s|^SEED_DEMO_PASSWORD=.*|SEED_DEMO_PASSWORD=ci-demo-password|" .env
+          grep -E '^(MYSQL_HOST|MYSQL_PORT|MYSQL_DATABASE|MYSQL_USER)=' .env
+
+      - name: Start the mysql service and wait for the healthcheck
+        run: |
+          set -euo pipefail
+          docker compose version
+          docker compose config --quiet
+          up_help="$(docker compose up --help 2>&1 || true)"
+          if grep -q -- '--wait' <<< "${up_help}"; then
+            # --wait returns once the healthcheck passes or fails; cap it at 120 s.
+            if ! timeout 120 docker compose up -d --wait mysql; then
+              echo "mysql did not become healthy within 120 s."
+              exit 1
+            fi
+          else
+            docker compose up -d mysql
+            status="starting"
+            for _ in $(seq 1 24); do
+              status="$(docker inspect --format '{{.State.Health.Status}}' factory-sherlock-mysql 2>/dev/null || echo starting)"
+              if [ "${status}" = "healthy" ]; then
+                break
+              fi
+              sleep 5
+            done
+            if [ "${status}" != "healthy" ]; then
+              echo "mysql did not become healthy within 120 s (last status: ${status})."
+              exit 1
+            fi
+          fi
+          docker compose ps
+
+      - name: Verify schemas and grants as root inside the container
+        run: |
+          set -euo pipefail
+          root_query() {
+            docker compose exec -T -e MYSQL_PWD="${MYSQL_ROOT_PASSWORD}" mysql \
+              mysql --batch --skip-column-names -uroot --protocol=tcp -h127.0.0.1 -e "$1"
+          }
+
+          echo "Schemas created by init_databases.sh:"
+          actual_schemas="$(root_query "SELECT SCHEMA_NAME, DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME IN ('${MYSQL_DATABASE}', '${MYSQL_DATABASE}_test') ORDER BY SCHEMA_NAME")"
+          expected_schemas="$(printf '%s\tutf8mb4_0900_ai_ci\n%s_test\tutf8mb4_0900_ai_ci' "${MYSQL_DATABASE}" "${MYSQL_DATABASE}")"
+          printf '%s\n' "${actual_schemas}"
+          diff <(printf '%s\n' "${expected_schemas}") <(printf '%s\n' "${actual_schemas}")
+
+          echo "Grants for '${MYSQL_USER}'@'%':"
+          actual_grants="$(root_query "SHOW GRANTS FOR '${MYSQL_USER}'@'%'")"
+          # MySQL prints privileges in its own fixed order, not the order in the GRANT statement.
+          privileges='SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, REFERENCES, INDEX, ALTER'
+          grantee="\`${MYSQL_USER}\`@\`%\`"
+          expected_grants="$(printf 'GRANT USAGE ON *.* TO %s\nGRANT %s ON `%s`.* TO %s\nGRANT %s ON `%s_test`.* TO %s' \
+            "${grantee}" \
+            "${privileges}" "${MYSQL_DATABASE}" "${grantee}" \
+            "${privileges}" "${MYSQL_DATABASE}" "${grantee}")"
+          printf '%s\n' "${actual_grants}"
+          diff <(printf '%s\n' "${expected_grants}") <(printf '%s\n' "${actual_grants}")
+
+      - name: Ensure a MySQL client is available on the runner
+        run: |
+          if ! command -v mysql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y mysql-client
+          fi
+          mysql --version
+
+      - name: Connect as the application user over TCP from the runner
+        env:
+          MYSQL_PWD: ${{ env.MYSQL_PASSWORD }}
+        run: |
+          set -euo pipefail
+          app_query() {
+            mysql --batch --skip-column-names --protocol=tcp -h127.0.0.1 -P"${MYSQL_PORT}" -u"${MYSQL_USER}" "$@"
+          }
+
+          echo "SELECT 1 against both schemas:"
+          test "$(app_query -e 'SELECT 1' "${MYSQL_DATABASE}")" = "1"
+          test "$(app_query -e 'SELECT 1' "${MYSQL_DATABASE}_test")" = "1"
+          echo "ok"
+
+          echo "Schemas visible to '${MYSQL_USER}':"
+          actual_databases="$(app_query -e 'SHOW DATABASES' | LC_ALL=C sort)"
+          expected_databases="$(printf '%s\n%s_test\ninformation_schema\nperformance_schema' "${MYSQL_DATABASE}" "${MYSQL_DATABASE}")"
+          printf '%s\n' "${actual_databases}"
+          diff <(printf '%s\n' "${expected_databases}") <(printf '%s\n' "${actual_databases}")
+
+          echo "Reading mysql.user must be denied:"
+          if app_query -e 'SELECT COUNT(*) FROM mysql.user' 2>"${RUNNER_TEMP}/denied.txt"; then
+            echo "The application user can read mysql.user; grants are too broad."
+            exit 1
+          fi
+          grep -i 'denied' "${RUNNER_TEMP}/denied.txt"
+
+      - name: Show mysql container logs
+        if: failure()
+        run: docker compose logs mysql
+
+      - name: Stop the service and remove its volume
+        if: always()
+        run: docker compose down -v
