@@ -186,7 +186,7 @@ How the simulator uses it:
 
 - Every machine starts the run with `IDLE -> RUNNING` ("Simulation started").
 - A measurement fault (`TOOL_WEAR`, `CALIBRATION_DRIFT`, `VARIATION`, `MATERIAL_ISSUE`) moves a `RUNNING` machine to `WARNING`; a machine already in `WARNING` stays there.
-- `DOWNTIME` executes `RUNNING -> FAULT`, then after one batch duration `FAULT -> STOPPED -> IDLE -> RUNNING`, all three stamped at the same simulated time. The transition table forbids `FAULT -> RUNNING` directly, which is why the stop and reset steps exist. Note that `WARNING -> FAULT` is also legal, so a DOWNTIME fault scheduled after a measurement fault on the same machine passes through `FAULT` and comes back to `RUNNING`, which clears the `WARNING` state even though the measurement fault is still active.
+- `DOWNTIME` executes `RUNNING -> FAULT`, then after one batch duration `FAULT -> STOPPED -> IDLE -> RUNNING`, all three stamped at the same simulated time. The transition table forbids `FAULT -> RUNNING` directly, which is why the stop and reset steps exist. `WARNING -> FAULT` is also legal, so a DOWNTIME fault scheduled after a measurement fault on the same machine passes through `FAULT` and comes back to `RUNNING`, which clears the `WARNING` state even though the measurement fault is still active.
 - At the end, `RUNNING -> IDLE` ("Simulation finished"); `WARNING` is kept.
 
 Each transition is persisted as a `machine_events` row with `event_type = STATE_CHANGE`, `previous_state`, `new_state`, and severity `CRITICAL` when the new state is `FAULT`, otherwise `INFO`.

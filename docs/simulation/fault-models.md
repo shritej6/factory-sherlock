@@ -141,7 +141,7 @@ Expected effect on defect rate: a step change to about 0.152 per inspection (0.1
 
 Defect types produced: each gross failure carries two codes: the dimensional classification for the direction of the deviation (`OVERSIZE_DIAMETER` or `UNDERSIZE_DIAMETER`, `HOLE_POSITION_DEVIATION`, or `DIMENSIONAL_DEVIATION`) plus `SURFACE_DAMAGE`. The `SURFACE_DAMAGE` code is only ever attached by this fault.
 
-Events and state changes: one `MATERIAL_ISSUE` machine event with severity `WARNING`, description "Simulated material defect: intermittent gross deviations", and `RUNNING -> WARNING`. Note that the fault is attached to a machine, not to a material lot; the lot assignment of the affected batches follows the normal rotation. The simulator does not quarantine any lot.
+Events and state changes: one `MATERIAL_ISSUE` machine event with severity `WARNING`, description "Simulated material defect: intermittent gross deviations", and `RUNNING -> WARNING`. The fault is attached to a machine, not to a material lot; the lot assignment of the affected batches follows the normal rotation. The simulator does not quarantine any lot.
 
 Configuration:
 
