@@ -4,8 +4,9 @@ from datetime import datetime
 from decimal import Decimal
 
 import pytest
-from app.core.database import SessionLocal, engine
+from app.core.database import Base, SessionLocal, engine
 from app.models import (
+    Inspection,
     Machine,
     MachineEvent,
     MachineEventType,
@@ -16,7 +17,9 @@ from app.models import (
     ProductionUnit,
     Severity,
 )
-from app.services import production_service
+from app.services import production_service, simulation_service
+from app.services.simulation_service import Row
+from fastapi.testclient import TestClient
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import DataError, IntegrityError, OperationalError
 from sqlalchemy.orm import Session
@@ -37,6 +40,38 @@ def test_session_rolls_back_partial_writes(db_session: Session) -> None:
             session.flush()
         session.rollback()
     assert db_session.scalar(select(func.count(ProductionOrder.id))) == 0
+
+
+def test_simulation_run_leaves_no_rows_when_a_late_bulk_insert_fails(
+    db_session: Session,
+    client: TestClient,
+    engineer: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Units and inspections are already written when the machine_events insert fails.
+
+    The request-scoped session must roll everything back, so the orders, batches,
+    units, and inspections that preceded the failure never become visible.
+    """
+    real_bulk_insert = simulation_service._bulk_insert
+
+    def failing_bulk_insert(session: Session, model: type[Base], rows: list[Row]) -> None:
+        if model is MachineEvent:
+            raise RuntimeError("simulated failure on the last bulk insert")
+        real_bulk_insert(session, model, rows)
+
+    monkeypatch.setattr(simulation_service, "_bulk_insert", failing_bulk_insert)
+    body = {
+        "seed": 3,
+        "start_time": "2026-11-05T08:00:00",
+        "batches_per_machine": 2,
+        "units_per_batch": 5,
+    }
+    with pytest.raises(RuntimeError, match="last bulk insert"):
+        client.post("/api/v1/simulation/runs", json=body, headers=engineer)
+
+    for model in (ProductionOrder, ProductionBatch, ProductionUnit, Inspection, MachineEvent):
+        assert db_session.scalar(select(func.count()).select_from(model)) == 0, model.__name__
 
 
 def test_foreign_keys_are_enforced_by_mysql(db_session: Session) -> None:

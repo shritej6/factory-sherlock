@@ -25,7 +25,7 @@ The simulation is split into a pure engine that never touches the database and a
 | Quality evaluation | `domain/quality_rules.py` | `evaluate_measurement` decides PASS or FAIL (`abs(measured - target) <= tolerance`) and `classify_defect` maps a failure to a defect type code by characteristic name. The engine calls these for every inspection. |
 | Output records | `simulation/events.py` | Plain frozen dataclasses: `SimulatedOrder`, `SimulatedBatch`, `SimulatedUnit`, `SimulatedInspection`, `StateChange`, `FaultEvent`, `SimulatedAlert`, collected in `SimulationOutput`. |
 | Engine | `simulation/engine.py` | `SimulationEngine(config, catalog).run()` walks every machine through its batches and fills a `SimulationOutput`. |
-| Persistence | `services/simulation_service.py` | `run_simulation` loads the catalog, converts the API request to a config, runs the engine, and calls `persist`, which maps the output onto ORM rows (`ProductionOrder`, `ProductionBatch`, `BatchMaterial`, `ProductionUnit`, `Inspection`, `InspectionDefect`, `MachineEvent`, `Alert`) and updates each `Machine.status`. The request-scoped session commits when the route returns, so a failure anywhere leaves no partial rows. |
+| Persistence | `services/simulation_service.py` | `run_simulation` loads the catalog, converts the API request to a config, runs the engine, and calls `persist`. Orders, batches with their `BatchMaterial` links, and alerts are few and are written as ORM objects. Units, inspections, inspection defects, and machine events are written with chunked multi-row `INSERT` statements (`BULK_CHUNK_SIZE = 1000` rows per statement); see [Persistence path](#persistence-path). `persist` also updates each `Machine.status`. The request-scoped session commits when the route returns, so a failure anywhere leaves no partial rows. |
 
 The engine imports only `app.domain`, `app.models.enums`, and its own package. It receives the catalog as data and returns data; the service is the only place where SQLAlchemy appears.
 
@@ -100,9 +100,31 @@ flowchart TD
     B -->|"done"| Fin["RUNNING -> IDLE (or stay WARNING)<br/>record final state"]
     Fin --> M
     M -->|"done"| Out["SimulationOutput"]
-    Out --> Persist["simulation_service.persist<br/>orders, batches, lots, units, inspections,<br/>defects, events, alerts, machine status"]
+    Out --> Persist["simulation_service.persist<br/>ORM: orders, batches, lots, alerts, machine status<br/>bulk INSERT: units, inspections, defects, events"]
     Persist --> Commit["request session commits<br/>(rollback on any error)"]
 ```
+
+## Persistence path
+
+`persist` runs inside the caller's transaction and never commits. The steps, in order:
+
+1. `_persist_orders` adds one `ProductionOrder` per `SimulatedOrder` through the ORM and flushes so the order ids exist.
+2. `_persist_batches` adds one `ProductionBatch` (status `COMPLETED`) with its `BatchMaterial` rows per `SimulatedBatch` and flushes once so the batch ids exist. `_complete_orders` then sets each order's `quantity_completed` from its batches and marks the order `COMPLETED` when the planned quantity is reached.
+3. `_unit_rows` builds one dictionary per unit (`batch_id`, `serial_number`, `sequence_in_batch`, `produced_at`) and `_bulk_insert` writes them with `session.execute(insert(ProductionUnit), rows)`, at most `BULK_CHUNK_SIZE` (1000) rows per statement. MySQL does not return generated ids for a multi-row `INSERT`, so `_unit_ids_by_serial` selects `serial_number, id` for the run's batches; the serial number is unique and keys the next step.
+4. `_inspection_rows` builds the inspection dictionaries with the mapped `unit_id`, counts failures, and `_bulk_insert` writes them. `_inspection_ids_by_unit_and_spec` selects `unit_id, specification_id, id` for the run's batches; the pair is unique (`uq_inspection_unit_spec`).
+5. `_defect_rows` maps every defect code to `(inspection_id, defect_type_id)` and `_bulk_insert` writes `inspection_defects`.
+6. `_event_rows` turns state changes and fault events into `machine_events` rows and writes them the same way. `_persist_alerts` adds `Alert` objects through the ORM, the final machine states are applied, and one last `flush()` writes the order counters, the alerts, and the machine statuses.
+
+The counts in `SimulationResult` are taken from the rows built in memory, so they equal what the engine produced. A unit or inspection row that the two selects do not find raises `KeyError` while the dependent rows are built, which fails the request and rolls the transaction back; `tests/integration/test_simulation_persistence.py` checks the counts across chunk boundaries and compares stored inspections with the engine output unit by unit, and `tests/integration/test_transactions.py` fails the last bulk insert and asserts that no rows remain.
+
+Measured with `scripts/development/benchmark_simulation.py` (`make benchmark-sim`): MySQL 8.4 on `127.0.0.1`, same machine as the client, median of 3 runs per shape, every run rolled back, rows per second counting units plus inspections over the whole `run_simulation` call. The engine alone takes under 0.01 s for the demo shape and 0.03 s for the large shape, so the times below are almost entirely persistence.
+
+| Shape | Units | Inspections | Before (ORM, one object per row) | After (chunked bulk inserts) |
+|-------|-------|-------------|----------------------------------|------------------------------|
+| demo (3 machines x 12 batches x 20 units, 2 faults) | 700 | 1400 | 0.29 s, 7266 rows/s | 0.04 s, 57274 rows/s |
+| large (3 machines x 40 batches x 50 units, 1 fault) | 6000 | 12000 | 1.71 s, 10517 rows/s | 0.25 s, 72173 rows/s |
+
+A second run of each benchmark agreed with these figures within 0.03 s. The numbers are specific to the development machine and a local MySQL; a networked database would widen the gap because the old path issued one `INSERT` per row.
 
 ## Determinism guarantees and limits
 
@@ -192,4 +214,5 @@ Each transition is persisted as a `machine_events` row with `event_type = STATE_
 | State machines as data | `domain/state_machines.py` tables and `MachineStateTracker.transition`. |
 | Many-to-many relationships populated by generated data | `SimulatedBatch.material_lot_ids` to `BatchMaterial` rows; `SimulatedInspection.defect_codes` to `InspectionDefect` rows. |
 | Single transaction for a multi-table write | `persist` flushes but never commits; `core/database.py::get_db_session` commits or rolls back. |
+| Bulk inserts and id mapping without `RETURNING` | `_bulk_insert` (chunked `insert(Model)` with a list of dictionaries), `_unit_ids_by_serial`, `_inspection_ids_by_unit_and_spec`. |
 | Input validation at two levels | Pydantic ranges in `schemas/simulation.py`; invariants in `SimulationConfig.__post_init__` and `Catalog.__post_init__`. |
