@@ -105,4 +105,11 @@ describe('request error mapping', () => {
     );
     expect(buildQuery({})).toBe('');
   });
+
+  it('repeats the key for an array value and drops an empty array', () => {
+    expect(buildQuery({ status: ['OPEN', 'IN_REVIEW'], limit: 1 })).toBe(
+      '?status=OPEN&status=IN_REVIEW&limit=1',
+    );
+    expect(buildQuery({ status: [] })).toBe('');
+  });
 });

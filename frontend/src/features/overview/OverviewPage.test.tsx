@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
-import type { Alert, OverdueCheckResponse, UserRole } from '@/types/api';
+import type { Alert, OrderStatusCounts, OverdueCheckResponse, UserRole } from '@/types/api';
 import {
   jsonResponse,
   makeUser,
@@ -36,6 +36,16 @@ const overdueAlert: Alert = {
 };
 
 const CHECK_URL = /\/analytics\/alerts\/checks\/overdue-orders$/;
+const STATUS_COUNTS_URL = /\/production-orders\/status-counts$/;
+const OPEN_INVESTIGATIONS_URL = /\/investigations\?status=OPEN&status=IN_REVIEW&limit=1&offset=0$/;
+
+const statusCounts: OrderStatusCounts = {
+  PLANNED: 2,
+  RELEASED: 4,
+  IN_PROGRESS: 3,
+  COMPLETED: 9,
+  CANCELLED: 1,
+};
 
 function checkResponse(raised: number): OverdueCheckResponse {
   return { checked: 9, raised, alerts: raised > 0 ? [overdueAlert] : [] };
@@ -49,8 +59,8 @@ function setup(
   const fetchMock = mockFetch([
     [CHECK_URL, check],
     [/\/analytics\/alerts/, () => pageResponse(alerts, 37, 10)],
-    [/\/production-orders\?.*status=RELEASED/, () => pageResponse([], 4, 1)],
-    [/\/production-orders\?.*status=IN_PROGRESS/, () => pageResponse([], 3, 1)],
+    [STATUS_COUNTS_URL, () => jsonResponse(statusCounts)],
+    [OPEN_INVESTIGATIONS_URL, () => pageResponse([], 3, 1)],
     [/\/investigations/, () => pageResponse([], 0)],
     [/\/quality\/summary/, () => jsonResponse(null)],
   ]);
@@ -88,10 +98,32 @@ describe('OverviewPage', () => {
     expect(new URL(String(last), 'http://localhost').searchParams.get('offset')).toBe('10');
   });
 
-  it('counts active orders from the envelope totals instead of the rows on one page', async () => {
-    setup();
+  it('counts active orders from one status-counts request instead of a list per status', async () => {
+    const fetchMock = setup();
     expect(await screen.findByText('7')).toBeInTheDocument();
     expect(screen.getByText('released or in progress')).toBeInTheDocument();
+    const orderCalls = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .filter((url) => url.includes('/production-orders'));
+    expect(orderCalls).toHaveLength(1);
+    expect(orderCalls[0]).toMatch(STATUS_COUNTS_URL);
+  });
+
+  it('counts open and in-review investigations from the total of a filtered one-row page', async () => {
+    const fetchMock = setup();
+    expect(await screen.findByText('3')).toBeInTheDocument();
+    expect(screen.getByText('open or in review')).toBeInTheDocument();
+    const countCall = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .find((url) => OPEN_INVESTIGATIONS_URL.test(url));
+    const params = new URL(String(countCall), 'http://localhost').searchParams;
+    expect(params.getAll('status')).toEqual(['OPEN', 'IN_REVIEW']);
+    expect(params.get('limit')).toBe('1');
+    const listCalls = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .filter((url) => url.includes('/investigations') && !OPEN_INVESTIGATIONS_URL.test(url));
+    expect(listCalls).toHaveLength(1);
+    expect(new URL(listCalls[0], 'http://localhost').searchParams.get('limit')).toBe('5');
   });
 
   it('links alerts that belong to a production order to the orders screen', async () => {

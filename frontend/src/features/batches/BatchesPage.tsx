@@ -30,6 +30,7 @@ export function BatchesPage() {
   const filters = {
     ...(orderId ? { order_id: Number(orderId) } : {}),
     ...(machineId ? { machine_id: Number(machineId) } : {}),
+    ...(status ? { status } : {}),
   };
   const { page, setPage, resetOffset } = usePageState();
   const batches = useBatches({ ...filters, ...page });
@@ -37,11 +38,6 @@ export function BatchesPage() {
   const machines = useMachines();
   const lots = useMaterialLots();
 
-  const visible = batches.data?.items.filter((b) => !status || b.status === status) ?? [];
-  const orderNumbers = useMemo(
-    () => new Map(orders.data?.items.map((o) => [o.id, o.order_number])),
-    [orders.data],
-  );
   const machineCodes = useMemo(
     () => new Map(machines.data?.map((m) => [m.id, m.code])),
     [machines.data],
@@ -50,7 +46,6 @@ export function BatchesPage() {
     () => new Map(lots.data?.map((l) => [l.id, l.lot_number])),
     [lots.data],
   );
-  const orderNumber = (id: number) => orderNumbers.get(id) ?? `#${id}`;
   const machineCode = (id: number) => machineCodes.get(id) ?? `#${id}`;
   const lotNumber = (id: number) => lotNumbers.get(id) ?? `#${id}`;
 
@@ -69,7 +64,7 @@ export function BatchesPage() {
     {
       key: 'order',
       header: 'Order',
-      render: (b) => <span className="font-mono">{orderNumber(b.production_order_id)}</span>,
+      render: (b) => <span className="font-mono">{b.order_number}</span>,
     },
     {
       key: 'machine',
@@ -156,8 +151,10 @@ export function BatchesPage() {
         <SelectField
           label="Status"
           value={status}
-          hint="Applies to the rows on this page."
-          onChange={(e) => setStatus(e.target.value as BatchStatus | '')}
+          onChange={(e) => {
+            setStatus(e.target.value as BatchStatus | '');
+            resetOffset();
+          }}
         >
           <option value="">All statuses</option>
           {BATCH_STATUSES.map((s) => (
@@ -192,7 +189,7 @@ export function BatchesPage() {
             <PageBody loading={batches.isPlaceholderData}>
               <DataTable
                 columns={columns}
-                rows={visible}
+                rows={batches.data.items}
                 rowKey={(b) => b.id}
                 caption="Production batches"
                 emptyTitle="No batches match these filters"

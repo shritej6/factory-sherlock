@@ -11,6 +11,7 @@ const batch: ProductionBatch = {
   id: 12,
   batch_number: 'ORD-1-B03',
   production_order_id: 1,
+  order_number: 'ORD-1',
   machine_id: 1,
   quantity: 20,
   status: 'IN_PROGRESS',

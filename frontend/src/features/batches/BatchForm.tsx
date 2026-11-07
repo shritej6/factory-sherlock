@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { SelectField, TextField } from '@/components/ui/Field';
 import { ErrorNotice, ErrorState } from '@/components/ui/States';
 import { invalidateProduction } from '@/hooks/invalidate';
-import { LOOKUP_PAGE, useMaterialLots, useOrders } from '@/hooks/queries';
+import { useMaterialLots, useProducibleOrders } from '@/hooks/queries';
 import { productionApi } from '@/services/api';
 import { formatNumber } from '@/utils/format';
 
@@ -18,15 +18,14 @@ interface MaterialLine {
 
 export function BatchForm({ onDone }: { onDone: () => void }) {
   const queryClient = useQueryClient();
-  const orders = useOrders(LOOKUP_PAGE);
+  const orders = useProducibleOrders();
   const lots = useMaterialLots();
   const [orderId, setOrderId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [lines, setLines] = useState<MaterialLine[]>([{ key: 1, lotId: '', quantity: '' }]);
   const [error, setError] = useState<unknown>(null);
 
-  const producible =
-    orders.data?.items.filter((o) => o.status === 'RELEASED' || o.status === 'IN_PROGRESS') ?? [];
+  const producible = orders.data ?? [];
   const availableLots = lots.data?.filter((l) => l.status === 'AVAILABLE') ?? [];
 
   const create = useMutation({

@@ -28,7 +28,9 @@ Environment variables:
 
 When `E2E_PASSWORD` is not set, the config reads `SEED_DEMO_PASSWORD` from the repository `.env`, the same value `uv run python -m app.seed --demo` used for the accounts. No password is committed or printed.
 
-Single test or file: `pnpm test:e2e e2e/login.spec.ts`, `pnpm test:e2e -g "viewer"`. Headed debugging: `pnpm test:e2e --headed` or `pnpm test:e2e --ui`. Traces are recorded on the first retry (CI) and are viewable from the HTML report in `playwright-report/`, which is ignored by Git together with `test-results/`.
+Single test or file: `pnpm test:e2e e2e/login.spec.ts`, `pnpm test:e2e -g "viewer"`. Headed debugging: `pnpm test:e2e --headed` or `pnpm test:e2e --ui`. Traces are recorded on the first retry (CI) without the spec sources and are viewable from the HTML report in `playwright-report/`, which is ignored by Git together with `test-results/`.
+
+Credentials and traces: a trace records typed values and request bodies, so the shared `signIn` helper in `e2e/support/auth.ts` does not type the password. It obtains a token from `/auth/login` with Node's `fetch`, outside the browser, stores it where the app keeps its session, and waits for the overview heading or the first alert, failing with the alert text. Only `login.spec.ts` types the password into the form, and that file runs with tracing off.
 
 ## What the tests assume about the demo data
 
@@ -39,6 +41,7 @@ The tests run against `database/seeds/demo_scenario.json` as loaded by `app.seed
 - Lots `L301` to `L303` (`CNC-02`) and `L401` to `L403` (`CNC-01`) are `AVAILABLE`; the quarantine test picks the first of them that is still available and whose batches do not involve `CNC-03`.
 - `batches_requiring_review` with the default window (2026-11-01 to 2026-11-05) and threshold 0.10 returns at least one row, which holds while the `CNC-03` batches are not quarantined.
 - The demo accounts `engineer` and `viewer` exist with the seeded password.
+- The traceability tests check through the API that lot `L201` exists before tracing it, so a missing seed fails with a message naming the lot rather than with a table timeout.
 
 Each test signs in on its own and does not depend on another test having run. Files run in parallel; the tests within a file run in order.
 

@@ -17,7 +17,9 @@ function readEnvValue(key: string): string | null {
 
 /**
  * The password of the seeded demo accounts: E2E_PASSWORD when set (CI), otherwise
- * SEED_DEMO_PASSWORD from the repository .env (local runs). Never written to the report.
+ * SEED_DEMO_PASSWORD from the repository .env (local runs). The shared signIn helper
+ * exchanges it for a token outside the browser, and the one spec that types it into the
+ * form runs with tracing off, so a retry trace in the report never holds the value.
  */
 export function demoPassword(): string {
   const value = process.env.E2E_PASSWORD || readEnvValue('SEED_DEMO_PASSWORD');

@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import type { UseQueryResult } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 
 import { ControlChart } from '@/components/charts/ControlChart';
 import { SelectField } from '@/components/ui/Field';
 import { SqlDisclosure } from '@/components/ui/SqlDisclosure';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
+import { EmptyState, ErrorNotice, ErrorState, LoadingState } from '@/components/ui/States';
 import { useAnalyticsQuery, useMachines, useSpecifications } from '@/hooks/queries';
-import type { QueryResult, SpecificationListItem } from '@/types/api';
+import type { Machine, QueryResult, SpecificationListItem } from '@/types/api';
 import { describeControlChart, toControlChartSeries } from '@/utils/chartTransforms';
+import { describeError } from '@/utils/errors';
 import { formatMeasure, toApiDateTime } from '@/utils/format';
 
 import type { TimeWindow } from './WindowControls';
@@ -29,7 +31,7 @@ function ControlChartResult({
   result: QueryResult;
   spec: SpecificationListItem;
 }) {
-  const series = toControlChartSeries(result.rows);
+  const series = useMemo(() => toControlChartSeries(result.rows), [result.rows]);
   const target = formatMeasure(spec.target_value);
   const tolerance = formatMeasure(spec.tolerance);
   return (
@@ -42,11 +44,114 @@ function ControlChartResult({
       />
       <p className="mt-3 text-sm text-ink">{describeControlChart(series)}</p>
       <p className="mt-1 text-xs text-ink-muted">
-        The grand mean and the control limits are computed over the subgroups in the selected
-        window, so changing the window or the machine filter changes the limits.
+        The grand mean and the pooled standard deviation are computed over the subgroups in the
+        selected window, so changing the window or the machine filter changes the limits. Each
+        subgroup has its own limits, three pooled standard deviations divided by the square root of
+        its sample count either side of the grand mean, so small subgroups get wider limits.
       </p>
       <SqlDisclosure sql={result.sql} queryName={result.query} params={result.params} />
     </>
+  );
+}
+
+interface ChartFiltersProps {
+  specs: SpecificationListItem[];
+  selected: SpecificationListItem;
+  onSpecificationChange: (id: string) => void;
+  machines: UseQueryResult<Machine[]>;
+  machineId: string;
+  onMachineChange: (id: string) => void;
+}
+
+/** Inline failure for the machine list; the chart still renders for all machines. */
+function MachinesNotice({ machines }: { machines: UseQueryResult<Machine[]> }) {
+  if (!machines.isError) return null;
+  return (
+    <div className="sm:col-span-2">
+      <ErrorNotice error={machines.error}>
+        The machine list could not be loaded, so the chart cannot be filtered by machine:{' '}
+        {describeError(machines.error)}
+      </ErrorNotice>
+    </div>
+  );
+}
+
+function ChartFilters({
+  specs,
+  selected,
+  onSpecificationChange,
+  machines,
+  machineId,
+  onMachineChange,
+}: ChartFiltersProps) {
+  return (
+    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:max-w-xl">
+      <SelectField
+        label="Specification"
+        value={String(selected.id)}
+        onChange={(e) => onSpecificationChange(e.target.value)}
+      >
+        {specs.map((spec) => (
+          <option key={spec.id} value={spec.id}>
+            {specificationLabel(spec)}
+          </option>
+        ))}
+      </SelectField>
+      <SelectField
+        label="Machine"
+        value={machineId}
+        onChange={(e) => onMachineChange(e.target.value)}
+        hint="Optional"
+      >
+        <option value="">All machines</option>
+        {machines.data?.map((machine) => (
+          <option key={machine.id} value={machine.id}>
+            {machine.code}
+          </option>
+        ))}
+      </SelectField>
+      <MachinesNotice machines={machines} />
+    </div>
+  );
+}
+
+/** Loading, failure, and empty notices for the specification list that drives the panel. */
+function SpecificationStatus({
+  specifications,
+}: {
+  specifications: UseQueryResult<SpecificationListItem[]>;
+}) {
+  if (specifications.isPending) return <LoadingState label="Loading specifications" />;
+  if (specifications.isError) {
+    return (
+      <div className="mt-3">
+        <ErrorState error={specifications.error} onRetry={() => void specifications.refetch()} />
+      </div>
+    );
+  }
+  if (specifications.data.length === 0) {
+    return (
+      <div className="mt-3">
+        <EmptyState title="No specifications are defined" />
+      </div>
+    );
+  }
+  return null;
+}
+
+function ChartOutcome({
+  result,
+  spec,
+}: {
+  result: UseQueryResult<QueryResult>;
+  spec: SpecificationListItem;
+}) {
+  return (
+    <div className="mt-4">
+      {result.isPending && <LoadingState label="Loading control chart" />}
+      {result.isError && <ErrorState error={result.error} onRetry={() => void result.refetch()} />}
+      {result.data && <ControlChartResult result={result.data} spec={spec} />}
+    </div>
   );
 }
 
@@ -75,54 +180,18 @@ export function ControlChartPanel({ window }: ControlChartPanelProps) {
         Batch means of one measured characteristic against three-sigma control limits and the
         specification limits, for the window above.
       </p>
-      {specifications.isPending && <LoadingState label="Loading specifications" />}
-      {specifications.isError && (
-        <div className="mt-3">
-          <ErrorState error={specifications.error} onRetry={() => void specifications.refetch()} />
-        </div>
-      )}
-      {specifications.data && specs.length === 0 && (
-        <div className="mt-3">
-          <EmptyState title="No specifications are defined" />
-        </div>
-      )}
+      <SpecificationStatus specifications={specifications} />
       {selected && (
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:max-w-xl">
-          <SelectField
-            label="Specification"
-            value={String(selected.id)}
-            onChange={(e) => setSpecificationId(e.target.value)}
-          >
-            {specs.map((spec) => (
-              <option key={spec.id} value={spec.id}>
-                {specificationLabel(spec)}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField
-            label="Machine"
-            value={machineId}
-            onChange={(e) => setMachineId(e.target.value)}
-            hint="Optional"
-          >
-            <option value="">All machines</option>
-            {machines.data?.map((machine) => (
-              <option key={machine.id} value={machine.id}>
-                {machine.code}
-              </option>
-            ))}
-          </SelectField>
-        </div>
+        <ChartFilters
+          specs={specs}
+          selected={selected}
+          onSpecificationChange={setSpecificationId}
+          machines={machines}
+          machineId={machineId}
+          onMachineChange={setMachineId}
+        />
       )}
-      {selected && (
-        <div className="mt-4">
-          {result.isPending && <LoadingState label="Loading control chart" />}
-          {result.isError && (
-            <ErrorState error={result.error} onRetry={() => void result.refetch()} />
-          )}
-          {result.data && <ControlChartResult result={result.data} spec={selected} />}
-        </div>
-      )}
+      {selected && <ChartOutcome result={result} spec={selected} />}
     </section>
   );
 }

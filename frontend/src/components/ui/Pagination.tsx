@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 
 import type { PageState } from '@/hooks/usePageState';
@@ -17,7 +18,63 @@ interface PaginationProps {
   className?: string;
 }
 
-/** Range text, previous and next buttons, and a page-size selector for one paged list. */
+/** The offset of the last page that still holds a row. */
+function lastPageOffset(total: number, limit: number): number {
+  return Math.floor((total - 1) / limit) * limit;
+}
+
+function PageSizeSelect({
+  limit,
+  pageSizes,
+  onChange,
+}: Pick<PaginationProps, 'limit' | 'onChange'> & { pageSizes: readonly number[] }) {
+  const sizes = pageSizes.includes(limit) ? pageSizes : [...pageSizes, limit].sort((a, b) => a - b);
+  return (
+    <label className="flex items-center gap-1.5">
+      <span>Rows per page</span>
+      <select
+        className="field-input w-auto py-1 text-xs"
+        value={limit}
+        onChange={(event) => onChange({ limit: Number(event.target.value), offset: 0 })}
+      >
+        {sizes.map((size) => (
+          <option key={size} value={size}>
+            {size}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function PageButtons({ total, limit, offset, onChange }: Omit<PaginationProps, 'label'>) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Button
+        size="sm"
+        disabled={offset === 0}
+        aria-label="Previous page"
+        onClick={() => onChange({ limit, offset: Math.max(0, offset - limit) })}
+      >
+        Previous
+      </Button>
+      <Button
+        size="sm"
+        disabled={offset + limit >= total}
+        aria-label="Next page"
+        onClick={() => onChange({ limit, offset: offset + limit })}
+      >
+        Next
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * Range text, previous and next buttons, and a page-size selector for one paged list.
+ * When the offset runs past the total (the last page emptied after a delete, or the total
+ * shrank) the component shows and requests the last page that still has rows.
+ */
 export function Pagination({
   total,
   limit,
@@ -27,12 +84,14 @@ export function Pagination({
   pageSizes = PAGE_SIZES,
   className = '',
 }: PaginationProps) {
+  const overrun = total > 0 && offset >= total;
+  const shownOffset = overrun ? lastPageOffset(total, limit) : offset;
+  useEffect(() => {
+    if (overrun) onChange({ limit, offset: shownOffset });
+  }, [overrun, limit, shownOffset, onChange]);
   if (total === 0) return null;
-  const from = Math.min(offset + 1, total);
-  const to = Math.min(offset + limit, total);
-  const atStart = offset === 0;
-  const atEnd = offset + limit >= total;
-  const sizes = pageSizes.includes(limit) ? pageSizes : [...pageSizes, limit].sort((a, b) => a - b);
+  const from = shownOffset + 1;
+  const to = Math.min(shownOffset + limit, total);
   return (
     <nav
       aria-label={`${label} pagination`}
@@ -42,38 +101,8 @@ export function Pagination({
         {`Showing ${formatNumber(from)} to ${formatNumber(to)} of ${formatNumber(total)}`}
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-1.5">
-          <span>Rows per page</span>
-          <select
-            className="field-input w-auto py-1 text-xs"
-            value={limit}
-            onChange={(event) => onChange({ limit: Number(event.target.value), offset: 0 })}
-          >
-            {sizes.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="flex items-center gap-1.5">
-          <Button
-            size="sm"
-            disabled={atStart}
-            aria-label="Previous page"
-            onClick={() => onChange({ limit, offset: Math.max(0, offset - limit) })}
-          >
-            Previous
-          </Button>
-          <Button
-            size="sm"
-            disabled={atEnd}
-            aria-label="Next page"
-            onClick={() => onChange({ limit, offset: offset + limit })}
-          >
-            Next
-          </Button>
-        </div>
+        <PageSizeSelect limit={limit} pageSizes={pageSizes} onChange={onChange} />
+        <PageButtons total={total} limit={limit} offset={shownOffset} onChange={onChange} />
       </div>
     </nav>
   );

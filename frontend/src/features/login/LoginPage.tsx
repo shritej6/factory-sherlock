@@ -6,9 +6,19 @@ import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/Field';
 import { ErrorNotice } from '@/components/ui/States';
 import { useAuth } from '@/hooks/useAuth';
+import { ApiError } from '@/services/http';
 
 interface LocationState {
   from?: { pathname: string };
+}
+
+/** A 429 carries the wait in details.retry_after_seconds; every other failure shows its message. */
+function loginFailureText(error: unknown): string | undefined {
+  if (!(error instanceof ApiError) || error.status !== 429) return undefined;
+  const seconds = error.details.retry_after_seconds;
+  return typeof seconds === 'number'
+    ? `Too many attempts. Try again in ${seconds} seconds.`
+    : undefined;
 }
 
 export function LoginPage() {
@@ -63,7 +73,7 @@ export function LoginPage() {
             onChange={(event) => setPassword(event.target.value)}
             required
           />
-          {error !== null && <ErrorNotice error={error} />}
+          {error !== null && <ErrorNotice error={error}>{loginFailureText(error)}</ErrorNotice>}
           <Button
             type="submit"
             variant="primary"

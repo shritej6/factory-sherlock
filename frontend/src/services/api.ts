@@ -10,6 +10,7 @@ import type {
   InspectionListParams,
   Investigation,
   InvestigationCreate,
+  InvestigationListParams,
   InvestigationStatusChange,
   LotQuarantineResult,
   LoginRequest,
@@ -19,6 +20,7 @@ import type {
   MaterialLot,
   OrderListParams,
   OrderStatus,
+  OrderStatusCounts,
   OverdueCheckResponse,
   Page,
   PageParams,
@@ -64,6 +66,7 @@ export const catalogApi = {
 export const productionApi = {
   orders: (params: OrderListParams = {}) =>
     request<Page<ProductionOrder>>('/production-orders', { query: params }),
+  orderStatusCounts: () => request<OrderStatusCounts>('/production-orders/status-counts'),
   createOrder: (body: ProductionOrderCreate) =>
     request<ProductionOrder>('/production-orders', { method: 'POST', body }),
   updateOrder: (id: number, body: ProductionOrderUpdate) =>
@@ -98,7 +101,8 @@ export const qualityApi = {
 };
 
 export const investigationApi = {
-  list: (page: PageParams = {}) => request<Page<Investigation>>('/investigations', { query: page }),
+  list: (params: InvestigationListParams = {}) =>
+    request<Page<Investigation>>('/investigations', { query: params }),
   get: (id: number) => request<Investigation>(`/investigations/${id}`),
   open: (body: InvestigationCreate) =>
     request<Investigation>('/investigations', { method: 'POST', body }),

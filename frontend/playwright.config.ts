@@ -22,7 +22,10 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   use: {
     baseURL,
-    trace: 'on-first-retry',
+    // Traces help with a flaky retry but are uploaded with the CI report, so the spec
+    // sources stay out of them. The login spec switches tracing off entirely because it
+    // types the demo password; the shared signIn helper never puts it in the browser.
+    trace: { mode: 'on-first-retry', sources: false },
   },
   projects: [
     {
