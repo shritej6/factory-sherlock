@@ -34,6 +34,7 @@ import type {
   QueryResult,
   SimulationRequest,
   SimulationResult,
+  SpecificationListItem,
   TokenResponse,
   User,
 } from '@/types/api';
@@ -48,6 +49,7 @@ export const authApi = {
 
 export const catalogApi = {
   products: () => request<Product[]>('/products'),
+  specifications: () => request<SpecificationListItem[]>('/specifications'),
   machines: () => request<Machine[]>('/machines'),
   machine: (id: number) => request<Machine>(`/machines/${id}`),
   changeMachineStatus: (id: number, body: MachineStatusChange) =>
