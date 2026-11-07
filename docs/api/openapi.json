@@ -129,6 +129,16 @@
                 }
               }
             }
+          },
+          "429": {
+            "description": "Too many failed login attempts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -625,6 +635,107 @@
         }
       }
     },
+    "/api/v1/specifications": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "List Specifications",
+        "description": "Flat list of every product's specifications, so a chart can pick one by id.",
+        "operationId": "list_specifications_api_v1_specifications_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SpecificationListItem"
+                  },
+                  "type": "array",
+                  "title": "Response List Specifications Api V1 Specifications Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database not reachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role not permitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Entity not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with existing data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/machines": {
       "get": {
         "tags": [
@@ -1083,8 +1194,19 @@
               "type": "integer",
               "maximum": 500,
               "minimum": 1,
-              "default": 100,
+              "default": 50,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
             }
           }
         ],
@@ -1094,11 +1216,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/MachineEventRead"
-                  },
-                  "title": "Response List Machine Events Api V1 Machines  Machine Id  Events Get"
+                  "$ref": "#/components/schemas/Page_MachineEventRead_"
                 }
               }
             }
@@ -1508,6 +1626,29 @@
               ],
               "title": "Status"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
           }
         ],
         "responses": {
@@ -1516,11 +1657,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ProductionOrderRead"
-                  },
-                  "title": "Response List Orders Api V1 Production Orders Get"
+                  "$ref": "#/components/schemas/Page_ProductionOrderRead_"
                 }
               }
             }
@@ -2087,6 +2224,29 @@
               ],
               "title": "Machine Id"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
           }
         ],
         "responses": {
@@ -2095,11 +2255,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ProductionBatchRead"
-                  },
-                  "title": "Response List Batches Api V1 Production Batches Get"
+                  "$ref": "#/components/schemas/Page_ProductionBatchRead_"
                 }
               }
             }
@@ -2664,10 +2820,21 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 1000,
+              "maximum": 500,
               "minimum": 1,
-              "default": 200,
+              "default": 50,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
             }
           }
         ],
@@ -2677,11 +2844,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/InspectionRead"
-                  },
-                  "title": "Response List Inspections Api V1 Inspections Get"
+                  "$ref": "#/components/schemas/Page_InspectionRead_"
                 }
               }
             }
@@ -2863,6 +3026,113 @@
         }
       }
     },
+    "/api/v1/inspections/import": {
+      "post": {
+        "tags": [
+          "quality"
+        ],
+        "summary": "Import inspections from a CSV file",
+        "description": "Multipart upload with one field named `file`: UTF-8 CSV, header row, columns `serial_number`, `characteristic`, `measured_value`, optional `inspected_at` and `defect_type_codes` (separated by `|`). At most 1 MiB and 5000 data rows. Every row is validated first; one invalid row rejects the whole file with 422 and no inspection is written.",
+        "operationId": "import_inspections_api_v1_inspections_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_inspections_api_v1_inspections_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InspectionImportResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database not reachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role not permitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Entity not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with existing data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/quality/summary": {
       "get": {
         "tags": [
@@ -3002,17 +3272,43 @@
         ],
         "summary": "List Investigations",
         "operationId": "list_investigations_api_v1_investigations_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/InvestigationRead"
-                  },
-                  "type": "array",
-                  "title": "Response List Investigations Api V1 Investigations Get"
+                  "$ref": "#/components/schemas/Page_InvestigationRead_"
                 }
               }
             }
@@ -3087,12 +3383,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       },
       "post": {
         "tags": [
@@ -3100,15 +3391,20 @@
         ],
         "summary": "Open Investigation",
         "operationId": "open_investigation_api_v1_investigations_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/InvestigationCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -3191,12 +3487,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/investigations/{investigation_id}": {
@@ -3928,6 +4219,23 @@
             }
           },
           {
+            "name": "specification_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Specification Id"
+            }
+          },
+          {
             "name": "threshold",
             "in": "query",
             "required": false,
@@ -4067,10 +4375,21 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 200,
+              "maximum": 500,
               "minimum": 1,
-              "default": 20,
+              "default": 50,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
             }
           }
         ],
@@ -4080,11 +4399,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AlertRead"
-                  },
-                  "title": "Response Recent Alerts Api V1 Analytics Alerts Get"
+                  "$ref": "#/components/schemas/Page_AlertRead_"
                 }
               }
             }
@@ -4269,6 +4584,120 @@
         }
       }
     },
+    "/api/v1/analytics/alerts/checks/overdue-orders": {
+      "post": {
+        "tags": [
+          "analytics"
+        ],
+        "summary": "Check Overdue Orders",
+        "description": "Raise ORDER_OVERDUE alerts for open orders past their due date; safe to repeat.",
+        "operationId": "check_overdue_orders_api_v1_analytics_alerts_checks_overdue_orders_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/OverdueCheckRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverdueCheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database not reachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role not permitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Entity not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with existing data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/simulation/runs": {
       "post": {
         "tags": [
@@ -4396,6 +4825,17 @@
             ],
             "title": "Machine Id"
           },
+          "production_order_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Production Order Id"
+          },
           "alert_type": {
             "$ref": "#/components/schemas/AlertType"
           },
@@ -4428,6 +4868,7 @@
         "required": [
           "id",
           "machine_id",
+          "production_order_id",
           "alert_type",
           "severity",
           "message",
@@ -4606,6 +5047,20 @@
           "QUARANTINED"
         ],
         "title": "BatchStatus"
+      },
+      "Body_import_inspections_api_v1_inspections_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_inspections_api_v1_inspections_import_post"
       },
       "DefectTypeRead": {
         "properties": {
@@ -4913,6 +5368,33 @@
         ],
         "title": "InspectionCreate",
         "description": "Manual inspection entry. The result is computed server-side from the spec."
+      },
+      "InspectionImportResult": {
+        "properties": {
+          "imported": {
+            "type": "integer",
+            "title": "Imported"
+          },
+          "failed_inspections": {
+            "type": "integer",
+            "title": "Failed Inspections"
+          },
+          "inspection_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Inspection Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "imported",
+          "failed_inspections",
+          "inspection_ids"
+        ],
+        "title": "InspectionImportResult",
+        "description": "Outcome of a CSV import. The whole file was recorded or nothing was."
       },
       "InspectionRead": {
         "properties": {
@@ -5499,6 +5981,239 @@
           "CANCELLED"
         ],
         "title": "OrderStatus"
+      },
+      "OverdueCheckRequest": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of",
+            "description": "Moment the due dates are judged against; defaults to the server clock"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "OverdueCheckRequest"
+      },
+      "OverdueCheckResponse": {
+        "properties": {
+          "checked": {
+            "type": "integer",
+            "title": "Checked"
+          },
+          "raised": {
+            "type": "integer",
+            "title": "Raised"
+          },
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/AlertRead"
+            },
+            "type": "array",
+            "title": "Alerts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checked",
+          "raised",
+          "alerts"
+        ],
+        "title": "OverdueCheckResponse",
+        "description": "Outcome of one overdue order check: how many orders were overdue and what was raised."
+      },
+      "Page_AlertRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlertRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[AlertRead]"
+      },
+      "Page_InspectionRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InspectionRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[InspectionRead]"
+      },
+      "Page_InvestigationRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InvestigationRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[InvestigationRead]"
+      },
+      "Page_MachineEventRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MachineEventRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[MachineEventRead]"
+      },
+      "Page_ProductionBatchRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProductionBatchRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[ProductionBatchRead]"
+      },
+      "Page_ProductionOrderRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProductionOrderRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[ProductionOrderRead]"
       },
       "ProductCreate": {
         "properties": {
@@ -6189,6 +6904,50 @@
           "tolerance"
         ],
         "title": "SpecificationCreate"
+      },
+      "SpecificationListItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "product_code": {
+            "type": "string",
+            "title": "Product Code"
+          },
+          "characteristic": {
+            "type": "string",
+            "title": "Characteristic"
+          },
+          "target_value": {
+            "type": "string",
+            "title": "Target Value"
+          },
+          "tolerance": {
+            "type": "string",
+            "title": "Tolerance"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product_id",
+          "product_code",
+          "characteristic",
+          "target_value",
+          "tolerance",
+          "unit"
+        ],
+        "title": "SpecificationListItem",
+        "description": "One specification with its product code, for pickers such as the control chart."
       },
       "SpecificationRead": {
         "properties": {

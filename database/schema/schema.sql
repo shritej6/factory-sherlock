@@ -13,12 +13,15 @@ CREATE TABLE `alerts` (
   `created_at` datetime NOT NULL DEFAULT (now()),
   `acknowledged_at` datetime DEFAULT NULL,
   `acknowledged_by` int DEFAULT NULL,
+  `production_order_id` int DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `acknowledged_by` (`acknowledged_by`),
   KEY `machine_id` (`machine_id`),
   KEY `ix_alerts_created` (`created_at`,`id`),
+  KEY `ix_alerts_production_order` (`production_order_id`),
   CONSTRAINT `alerts_ibfk_1` FOREIGN KEY (`acknowledged_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `alerts_ibfk_2` FOREIGN KEY (`machine_id`) REFERENCES `machines` (`id`) ON DELETE SET NULL
+  CONSTRAINT `alerts_ibfk_2` FOREIGN KEY (`machine_id`) REFERENCES `machines` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_alerts_production_order` FOREIGN KEY (`production_order_id`) REFERENCES `production_orders` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 CREATE TABLE `batch_materials` (
   `batch_id` int NOT NULL,
