@@ -18,7 +18,7 @@ Where a rule is enforced at more than one layer, all layers are listed; the firs
 | BR-02 | Only active users can log in or use a token. | Service check (`auth_service.authenticate`, `get_active_user`) |
 | BR-03 | Login failures return one generic message regardless of cause. | Service check (`auth_service.authenticate`) |
 | BR-04 | A token expires after `JWT_ACCESS_TOKEN_MINUTES`. | Service check (`core/security.decode_access_token`) |
-| BR-05 | Reads require any authenticated user; writes require the role on the route: OPERATOR set (ADMIN, ENGINEER, OPERATOR) for machine status, order status, batch start and completion, inspections, alert acknowledgement; ENGINEER set (ADMIN, ENGINEER) for products, machines, material lots, order creation and edit, quarantine, investigations, simulation. | Service check (`api/deps.py::require_roles`) |
+| BR-05 | Reads require any authenticated user; writes require the role on the route: OPERATOR set (ADMIN, ENGINEER, OPERATOR) for machine status, order status, batch start and completion, inspections, inspection import, alert acknowledgement, the overdue order check; ENGINEER set (ADMIN, ENGINEER) for products, machines, material lots, order creation and edit, quarantine, investigations, simulation. | Service check (`api/deps.py::require_roles`) |
 | BR-06 | The role in the token is informational; the database row decides. | Service check (`api/deps.py::get_current_user`) |
 
 ## Reference data
@@ -78,12 +78,12 @@ Where a rule is enforced at more than one layer, all layers are listed; the firs
 
 | ID | Rule | Enforced by |
 |----|------|-------------|
-| BR-60 | A measurement passes when `abs(measured - target) <= tolerance`; otherwise it fails. | Domain function (`evaluate_measurement`) used by `quality_service.record_inspection` and the simulator |
-| BR-61 | A failed measurement is classified by characteristic: diameter characteristics (`diameter`, `outer_diameter`, `bore_diameter`) to OVERSIZE_DIAMETER or UNDERSIZE_DIAMETER by sign; `hole_position` to HOLE_POSITION_DEVIATION; others to DIMENSIONAL_DEVIATION. | Domain function (`classify_defect`) |
+| BR-60 | A measurement passes when `abs(measured - target) <= tolerance`; otherwise it fails. | Domain function (`evaluate_measurement`) used by `quality_service.record_inspection` (manual entry and every row of the CSV import, `inspection_import.import_csv`) and the simulator |
+| BR-61 | A failed measurement is classified by characteristic: diameter characteristics (`diameter`, `outer_diameter`, `bore_diameter`) to OVERSIZE_DIAMETER or UNDERSIZE_DIAMETER by sign; `hole_position` to HOLE_POSITION_DEVIATION; others to DIMENSIONAL_DEVIATION. | Domain function (`classify_defect`) through `record_inspection`, so manual and imported inspections are classified identically |
 | BR-62 | The specification must belong to the product of the unit's order. | Service check (`record_inspection`) |
-| BR-63 | The computed defect code is always attached to a failed inspection; additional codes supplied by the operator must exist; a passing inspection cannot carry defect codes. | Service check (`record_inspection`) |
-| BR-64 | A unit has at most one inspection per specification. | MySQL constraint (`uq_inspection_unit_spec`); service check (409 via `_flush_or_conflict`) |
-| BR-65 | Measured values have at most three decimals. | Schema validation (`InspectionCreate`, `decimal_places=3`); MySQL constraint (`NUMERIC(10,3)`) |
+| BR-63 | The computed defect code is always attached to a failed inspection; additional codes supplied by the operator must exist; a passing inspection cannot carry defect codes. | Service check (`record_inspection`); the CSV import repeats the unknown-code and passing-measurement checks per row in `inspection_import._rule_errors` so the 422 names the row, then records through `record_inspection` |
+| BR-64 | A unit has at most one inspection per specification. | MySQL constraint (`uq_inspection_unit_spec`); service check (409 via `_flush_or_conflict`); the CSV import rejects a pair that is already inspected or repeated within the file with a row-level 422 before anything is written (`inspection_import._rule_errors`, `inspection_csv._duplicate_error`) |
+| BR-65 | Measured values have at most three decimals. | Schema validation (`InspectionCreate`, `decimal_places=3`); service check for CSV rows (`inspection_csv._parse_measured`: at most 3 decimal places, absolute value below 10000000); MySQL constraint (`NUMERIC(10,3)`) |
 | BR-66 | The stored PASS/FAIL result is not recomputed when a specification changes. | Service check (result persisted at inspection time; model docstring) |
 | BR-67 | Defect rate is `failed / inspected` rounded to four decimals, and 0 when nothing was inspected. | Domain function (`defect_rate`), mirrored in SQL with `NULLIF` and `ROUND(..., 4)` |
 | BR-68 | A simulated batch whose defect rate reaches 0.15 raises a HIGH_DEFECT_RATE alert, once per consecutive run above the threshold. | Service check (`simulation/engine.py`) |
@@ -136,6 +136,20 @@ The check runs on demand through `POST /api/v1/analytics/alerts/checks/overdue-o
 | BR-102 | Severity is WARNING when the order is 1 to 2 days late and CRITICAL from the third day. The message is `Order <order_number> is <n> day(s) overdue (due <due_date>)`. | Service check (`overdue_severity`, `CRITICAL_AFTER_DAYS`, `overdue_message`) |
 | BR-103 | The check is idempotent: an order that already has an unacknowledged ORDER_OVERDUE alert gets no new one, however often the check runs. After that alert is acknowledged, the next check raises a fresh alert (with the current days late and severity) if the order is still overdue. | Service check (`_orders_with_open_alert`) |
 | BR-104 | Deleting an order keeps its alerts and clears the link; the alert text still names the order number. | MySQL constraint (`alerts.production_order_id` ON DELETE SET NULL) |
+
+## Inspection import
+
+`POST /api/v1/inspections/import` (Operator role set) loads a CSV file through `inspection_csv.parse_csv` (file format, no database access) and `inspection_import.import_csv` (reference resolution and persistence). The rules of the Quality section apply to every imported row because each row is recorded through `quality_service.record_inspection`; the rules below are specific to the file. The full format is in `docs/quality/inspection-import.md`.
+
+| ID | Rule | Enforced by |
+|----|------|-------------|
+| BR-110 | The upload is one multipart field `file` with content type `text/csv`, `application/csv`, or `application/vnd.ms-excel`, or `application/octet-stream` when the file name ends in `.csv`; it is UTF-8 (a byte order mark is accepted), not empty, at most 1 MiB, and holds at most 5000 data rows. | Service check (`inspection_import.decode_upload`, `inspection_csv.parse_csv`, `MAX_FILE_BYTES`, `MAX_DATA_ROWS`); the route reads at most one byte past the size limit |
+| BR-111 | A header row is required; column names are matched after trimming and lower-casing; `serial_number`, `characteristic`, and `measured_value` are required, `inspected_at` and `defect_type_codes` optional; an unknown, duplicated, or missing column rejects the whole file; blank lines are ignored. | Service check (`inspection_csv._read_header`, `_is_blank`) |
+| BR-112 | Per row: `serial_number` (at most 40 characters) and `characteristic` (at most 50) are non-empty; `measured_value` is a finite decimal with at most 3 decimal places and an absolute value below 10000000; `inspected_at` is empty or an ISO 8601 timestamp without a UTC offset (fractional seconds are dropped; empty means the request time, shared by every row); `defect_type_codes` is empty or codes matching `CODE_PATTERN` separated by `\|`, at most 10 distinct codes; a row with the wrong number of values is rejected. | Service check (`inspection_csv._parse_record` and its field parsers) |
+| BR-113 | `serial_number` must name an existing production unit and `characteristic` a specification of that unit's product, matched without regard to case. | Service check (`inspection_import._resolve_row`, `_load_lookups`) |
+| BR-114 | The same `serial_number` and `characteristic` pair appears at most once per file and must not already have an inspection in the database. | Service check (`inspection_csv._duplicate_error`, `inspection_import._rule_errors`); MySQL constraint (`uq_inspection_unit_spec`) |
+| BR-115 | The import is all or nothing: every row is validated before any write; one problem returns 422 with `details.errors` as a list of `{row, field, message}` objects sorted by row, and no inspection is written; otherwise every row is recorded in the request transaction and the response is 201 with `imported`, `failed_inspections`, and `inspection_ids` in file order. | Service check (`inspection_import.import_csv`) plus request transaction (`core/database.get_db_session`) |
+| BR-116 | Error messages name the row, the column, and the rule that failed; they never repeat free text from the file, and nothing from the file is logged (the success log line carries counts only). | Service check by convention (`inspection_csv` module docstring, `import_csv` logging); reviewed in code review |
 
 ## Rules stated in the brief but not enforced in code
 

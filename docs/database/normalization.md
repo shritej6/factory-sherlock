@@ -21,7 +21,7 @@ Notation: `A -> B` means B is functionally determined by A. Surrogate keys are w
 | defect_types | `id`, `code` | `id -> code, name, description`; `code -> id` |
 | inspections | `id`, `(unit_id, specification_id)` | `id -> unit_id, specification_id, measured_value, result, inspected_at`; `(unit_id, specification_id) -> id` |
 | inspection_defects | `(inspection_id, defect_type_id)` | none (all-key relation) |
-| alerts | `id` | `id -> machine_id, alert_type, severity, message, created_at, acknowledged_at, acknowledged_by` |
+| alerts | `id` | `id -> machine_id, production_order_id, alert_type, severity, message, created_at, acknowledged_at, acknowledged_by` |
 | investigations | `id` | `id -> title, machine_id, product_id, window_start, window_end, status, summary, conclusion, opened_by, created_at, closed_at` |
 | investigation_evidence | `id`, `(investigation_id, sequence)` | `id -> investigation_id, sequence, rule_code, title, narrative, query_name, query_sql, result_rows, created_at`; `(investigation_id, sequence) -> id` |
 | investigation_batches | `(investigation_id, batch_id)` | `(investigation_id, batch_id) -> reason` |

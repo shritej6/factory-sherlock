@@ -9,7 +9,7 @@ Factory Sherlock is a MySQL-backed manufacturing simulation and quality investig
 3. Make the change in small, reviewable commits using the conventional commit format.
 4. Run the quality gates locally (see below) before opening the pull request.
 5. Open a pull request. The template in `.github/pull_request_template.md` is mandatory, including the AI assistance disclosure section required by the course.
-6. Wait for the CI workflows (`Backend CI`, `Frontend CI`, `Docs Lint`) to pass. Fix failures on the branch; do not merge around them.
+6. Wait for the CI workflows (`Backend CI`, `Frontend CI`, `Docs Lint`, `Compose Smoke`, `End-to-End`) to pass. `Compose Smoke` runs only when `docker-compose.yml`, `scripts/setup/`, `.env.example`, or the workflow itself change. Fix failures on the branch; do not merge around them.
 7. Merge with a merge commit or squash, then delete the branch.
 
 Direct pushes to `main` are not part of the workflow.
@@ -82,12 +82,13 @@ A pull request is ready for review only when all of the following hold. CI enfor
 | No secrets                | `.env` is ignored by Git; nothing in the diff contains credentials or tokens            |
 | Migrations are reversible | Every revision has a working `downgrade()`, tested with `alembic downgrade -1`          |
 | Documentation checked     | `make check-docs` passes; affected files under `docs/` updated                          |
+| End-to-end (optional locally) | `pnpm test:e2e` in `frontend/` against a seeded demo database; the `End-to-End` workflow runs it in CI |
 
-The `Makefile` wraps these commands: `make lint`, `make test-backend`, `make test-frontend`, `make check-docs`.
+The `Makefile` wraps these commands: `make lint`, `make test-backend`, `make test-frontend`, `make check-docs`. `make help` lists every target, including `make check-overdue` (the overdue order check) and `make benchmark-sim` (the simulation persistence benchmark), which are operational commands rather than gates.
 
 ## Running the project
 
-Setup instructions live in `docs/development/setup-guide.md` and are not repeated here. In short: copy `.env.example` to `.env`, start MySQL with `make db-init` and `make db-start` (or `docker compose up -d mysql`, which has not been executed on the maintainer's machine because Docker is not installed there), then run `make migrate`, `make seed-demo`, `make backend`, and `make frontend`. Run `make help` to list every target.
+Setup instructions live in `docs/development/setup-guide.md` and are not repeated here. In short: copy `.env.example` to `.env`, start MySQL with `make db-init` and `make db-start` (or `docker compose up -d mysql`; Docker is not installed on the maintainer's machine, so that path is verified by the `Compose Smoke` workflow in `.github/workflows/compose-smoke.yml`), then run `make migrate`, `make seed-demo`, `make backend`, and `make frontend`. Run `make help` to list every target.
 
 ## Coding standards
 

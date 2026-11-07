@@ -218,7 +218,7 @@ One evidence card per rule that fired.
 | id | int | NO | AUTO_INCREMENT | PRIMARY KEY | Surrogate key |
 | investigation_id | int | NO | none | FK `investigations.id` ON DELETE CASCADE; leading column of UNIQUE `uq_evidence_investigation_sequence` | Owning investigation |
 | sequence | int | NO | none | part of UNIQUE `uq_evidence_investigation_sequence` | Display order, starting at 1 |
-| rule_code | varchar(40) | NO | none | | `R1` to `R6` |
+| rule_code | varchar(40) | NO | none | | `R1` to `R7` |
 | title | varchar(150) | NO | none | | Card title |
 | narrative | text | NO | none | | Plain-language finding |
 | query_name | varchar(60) | NO | none | | Key in the SQL catalogue, for example `investigation.defect_onset` |

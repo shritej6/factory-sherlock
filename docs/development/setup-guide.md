@@ -1,6 +1,6 @@
 # Setup guide
 
-Verified against the scripts and configuration in this repository: `.env.example`, `docker-compose.yml`, `scripts/setup/init_databases.sh`, `scripts/development/local_mysql.sh`, `reset_database.py`, `export_schema.sh`, `export_openapi.py`, `benchmark_simulation.py`, `backend/pyproject.toml`, `backend/alembic.ini`, `backend/app/core/config.py`, `backend/app/seed.py`, `frontend/package.json`, `frontend/vite.config.ts`. Commands are for macOS and Linux with a POSIX shell; paths are relative to the repository root unless a `cd` is shown.
+Verified against the scripts and configuration in this repository: `.env.example`, `docker-compose.yml`, `scripts/setup/init_databases.sh`, `scripts/development/local_mysql.sh`, `reset_database.py`, `export_schema.sh`, `export_openapi.py`, `benchmark_simulation.py`, `backend/pyproject.toml`, `backend/alembic.ini`, `backend/app/core/config.py`, `backend/app/seed.py`, `backend/app/jobs/check_overdue_orders.py`, `frontend/package.json`, `frontend/vite.config.ts`, `frontend/playwright.config.ts`, `frontend/e2e/support/env.ts`, `Makefile`. Commands are for macOS and Linux with a POSIX shell; paths are relative to the repository root unless a `cd` is shown.
 
 ## Prerequisites
 
@@ -87,7 +87,7 @@ uv sync                        # creates .venv from uv.lock
 uv run alembic upgrade head    # creates the 17 tables in MYSQL_DATABASE
 ```
 
-Alembic reads the connection URL from the application settings (`migrations/env.py`), so it always targets the database the backend will use. There is one migration, `migrations/versions/20261104_0106_create_manufacturing_schema.py`.
+Alembic reads the connection URL from the application settings (`migrations/env.py`), so it always targets the database the backend will use. There are two migrations, applied in order by `alembic upgrade head`: `migrations/versions/20261104_0106_create_manufacturing_schema.py` (revision `3a5e982c3679`, the 17 tables) and `migrations/versions/20261107_2106_link_alerts_to_production_orders.py` (revision `383273c26ef7`, which adds `alerts.production_order_id` with its index and foreign key). Both have a working `downgrade()`.
 
 ## 4. Seed reference data and the demo scenario
 
@@ -110,6 +110,13 @@ uv run uvicorn app.main:app --reload --port 8000
 - Interactive docs: `http://127.0.0.1:8000/api/docs`
 - Health: `curl http://127.0.0.1:8000/api/v1/health` returns `{"status":"ok","database":"ok"}`
 - Login: `curl -X POST http://127.0.0.1:8000/api/v1/auth/login -H 'Content-Type: application/json' -d '{"username":"engineer","password":"<SEED_DEMO_PASSWORD>"}'`
+- Import inspections from a CSV file (token of an operator, engineer, or admin in `$TOKEN`; the `type=` suffix is needed because curl otherwise sends `application/octet-stream`). The sample file expects the batch described in `docs/quality/inspection-import.md` to exist first:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/inspections/import \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@database/seeds/sample_inspection_import.csv;type=text/csv"
+```
 
 Logs are single-line JSON on stdout.
 
@@ -121,7 +128,7 @@ pnpm install
 pnpm dev
 ```
 
-Vite serves `http://localhost:5173` and proxies `/api` to `http://127.0.0.1:8000`, so the backend must be running. Other scripts: `pnpm build`, `pnpm preview`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm format`. The application has a screen for each route (login, overview, machines, orders, batches, inspections, traceability, investigations and the investigation detail case board, analytics with the SQL explorer, simulation).
+Vite serves `http://localhost:5173` and proxies `/api` to `http://127.0.0.1:8000`, so the backend must be running. Other scripts: `pnpm build`, `pnpm preview`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e` (section 10), `pnpm format`. The application has a screen for each route (login, overview, machines, orders, batches, inspections with the CSV import panel, traceability, investigations and the investigation detail case board, analytics with the control chart and the SQL explorer, simulation). List screens read the page envelope (`items`, `total`, `limit`, `offset`) that the paginated endpoints return.
 
 ## 7. Reset the database
 
@@ -159,7 +166,18 @@ cd ../frontend
 pnpm lint && pnpm typecheck && pnpm test
 ```
 
-See `docs/testing/testing-strategy.md` for the test layout and database isolation.
+See `docs/testing/testing-strategy.md` for the test layout and database isolation. `make lint`, `make test-backend`, `make test-frontend`, and `make check-docs` wrap the commands above.
+
+End-to-end browser tests (Playwright Test) live in `frontend/e2e` and need MySQL with the demo scenario loaded (`make seed-demo`, or `make reset-demo` for a clean state):
+
+```bash
+cd frontend
+pnpm exec playwright install chromium   # once
+pnpm test:e2e
+pnpm test:e2e:report                    # HTML report of the last run
+```
+
+`frontend/playwright.config.ts` starts the servers itself: the backend with `uv run uvicorn app.main:app --host 127.0.0.1 --port 8013` (from `backend/`) and the Vite dev server on port 5183 with its `/api` proxy pointed at port 8013 (`VITE_API_PROXY_TARGET`), so a development session on ports 8000 and 5173 is not disturbed. Locally a server already listening on 8013 or 5183 is reused; with `CI=1` fresh servers are always started. The password of the demo accounts comes from `E2E_PASSWORD` when set, otherwise from `SEED_DEMO_PASSWORD` in the repository `.env` (`frontend/e2e/support/env.ts`); it is never printed or written to the report. Each run leaves one closed investigation and one quarantined material lot behind; `make reset-demo` restores the demo state. `frontend/e2e/README.md` lists the variables (`E2E_BASE_URL`, `E2E_API_PORT`, `E2E_BROWSER_CHANNEL`, `CI`) and what the tests assume about the demo data. In CI the `End-to-End` workflow (`.github/workflows/e2e.yml`) runs the same command against a MySQL 8.4 service container.
 
 ## 11. Render the Mermaid diagrams
 
@@ -182,6 +200,14 @@ make benchmark-sim
 ```
 
 Runs `scripts/development/benchmark_simulation.py` from `backend/`. It needs a migrated and seeded database (reference data is enough) and times `simulation_service.run_simulation`, the function behind `POST /api/v1/simulation/runs`, for two request shapes: the demo scenario (3 machines x 12 batches x 20 units) and a large one (3 x 40 x 50, 6000 units and 12000 inspections). Each shape runs three times inside a session that is rolled back, so no rows are left behind (only the InnoDB auto-increment counters advance). The output is one table with the shape, unit and inspection counts, median seconds for the service call, median seconds for the engine alone, and rows per second (units plus inspections over the median service time). The script refuses to run when `APP_ENV=production`. The figures recorded for the switch to bulk inserts are in `docs/simulation/simulation-design.md`.
+
+## 13. Raise overdue order alerts
+
+```bash
+make check-overdue
+```
+
+Equivalent to `cd backend && uv run python -m app.jobs.check_overdue_orders`; add `--as-of 2026-11-07T08:00:00` to judge due dates against another moment. The job raises one `ORDER_OVERDUE` alert per `PLANNED`, `RELEASED`, or `IN_PROGRESS` order whose `due_date` is before the check date and that has no unacknowledged overdue alert yet (`alert_service.raise_overdue_order_alerts`, rules BR-100 to BR-104 in `docs/requirements/business-rules.md`), commits, logs `checked`, `raised`, and `alert_ids` as one JSON line, and exits 0. It is idempotent, so a scheduler can run it as often as wanted. The same check is available to operators, engineers, and admins as `POST /api/v1/analytics/alerts/checks/overdue-orders` with an optional `{"as_of": "..."}` body. On the demo data the order that query 02 labels `OVERDUE` (the CNC-02 order left `IN_PROGRESS` by the simulated downtime) is the one that receives an alert.
 
 ## Troubleshooting
 

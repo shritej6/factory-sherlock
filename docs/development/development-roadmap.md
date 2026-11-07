@@ -1,10 +1,10 @@
 # Development roadmap
 
-The project brief defines nine phases. This document records the intended scope of each phase and its honest status as of the current repository contents. Status values: Complete (all listed items exist in the repository), In progress (some items exist), Not started.
+The project brief defines nine phases. This document records the intended scope of each phase and its status as of 2026-11-07, read from the repository contents. Status values: Complete (all listed items exist in the repository), Complete with gaps (the phase is usable but a listed limit remains), In progress (some items exist), Not started.
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 1 | Repository foundation | Complete with gaps |
+| 1 | Repository foundation | Complete |
 | 2 | Architecture and requirements | Complete |
 | 3 | Application foundation | Complete |
 | 4 | Manufacturing management | Complete |
@@ -18,17 +18,17 @@ The project brief defines nine phases. This document records the intended scope 
 
 Scope: repository layout, licensing, editor and ignore configuration, environment template, database bootstrap scripts, dependency locking.
 
-Present: `LICENSE` (MIT), `.editorconfig`, `.gitignore` (secrets, Python, Node, `.local/`, editors), `.env.example` with every variable documented, `docker-compose.yml`, `scripts/setup/init_databases.sh`, `scripts/development/local_mysql.sh`, `reset_database.py`, `export_schema.sh`, `export_openapi.py`, `backend/pyproject.toml` with `uv.lock`, `frontend/package.json` with `pnpm-lock.yaml`, `backend/README.md`.
+Present: `LICENSE` (MIT), `.editorconfig`, `.gitignore` (secrets, Python, Node, `.local/`, editors), `.env.example` with every variable documented, `docker-compose.yml`, `scripts/setup/init_databases.sh`, `scripts/development/local_mysql.sh`, `reset_database.py`, `export_schema.sh`, `export_openapi.py`, `benchmark_simulation.py`, `backend/pyproject.toml` with `uv.lock`, `frontend/package.json` with `pnpm-lock.yaml`, `backend/README.md`.
 
-Also present: the repository root `README.md` and three GitHub Actions workflows (`backend-ci.yml`, `frontend-ci.yml`, `docs-lint.yml`).
+Also present: the repository root `README.md` and five GitHub Actions workflows: `backend-ci.yml` (Backend CI), `frontend-ci.yml` (Frontend CI), `docs-lint.yml` (Docs Lint), `compose-smoke.yml` (Compose Smoke), and `e2e.yml` (End-to-End).
 
-Gaps: `docker-compose.yml` mounts `scripts/setup/init_databases.sh` as `/docker-entrypoint-initdb.d/01_init.sh` and passes `MYSQL_ROOT_ARGS` and `MYSQL_CLIENT_ARGS`, but it has not been executed on this machine because Docker is not installed. The Docker path is therefore unverified; the local MySQL path (`scripts/development/local_mysql.sh`) is the one that has been run. The workflows have not been observed running on GitHub from this checkout.
+Docker path: `docker-compose.yml` mounts `scripts/setup/init_databases.sh` as `/docker-entrypoint-initdb.d/01_init.sh` and passes `MYSQL_ROOT_ARGS` and `MYSQL_CLIENT_ARGS`. Docker is not installed on the development machine, so the local MySQL path (`scripts/development/local_mysql.sh`) is the one run by hand and the Docker path is verified by the Compose Smoke workflow, which starts the `mysql` service from a `.env` built out of `.env.example`, checks the schemas, their collation, and the application user's grants as root inside the container, and connects as the application user from the runner. It runs on every push and pull request that changes `docker-compose.yml`, `scripts/setup/`, `.env.example`, or the workflow itself.
 
 ## Phase 2: Architecture and requirements
 
 Scope: system overview, component design, data flow, repository structure, architecture decision records, database design, simulation and investigation design, functional and non-functional requirements, business rules.
 
-Present: `docs/architecture/system-overview.md`; this documentation set (`docs/simulation/`, `docs/investigation/`, `docs/requirements/`, `docs/testing/`, `docs/development/`, `docs/media/`).
+Present: `docs/architecture/system-overview.md`; this documentation set (`docs/simulation/`, `docs/investigation/`, `docs/requirements/`, `docs/testing/`, `docs/development/`, `docs/media/`, `docs/quality/`).
 
 Also present: `docs/architecture/` (system overview, component design, data flow, repository structure), `docs/decisions/` (ADR-0001 to ADR-0008), `docs/database/`, `docs/milestones/`, and `docs/ai_evidence/`.
 
@@ -36,9 +36,9 @@ Also present: `docs/architecture/` (system overview, component design, data flow
 
 Scope: configuration, database engine and session management, structured logging, typed errors and HTTP mapping, password hashing and JWT, role dependencies, health check, ORM models, Alembic migration, seed command.
 
-Present: `backend/app/core/` (clock, config, database, logging, exceptions, security), `backend/app/api/` (deps, errors, router, health, auth), `backend/app/models/` (seven aggregates, enums, timestamp mixin), `backend/migrations/` with one migration creating 17 tables, `backend/app/seed.py` with `database/seeds/01_reference_data.sql`, `database/schema/schema.sql` snapshot, `docs/api/openapi.json`.
+Present: `backend/app/core/` (clock, config, database, logging, exceptions, security, throttle), `backend/app/api/` (deps with the `Paging` dependency, errors, router, health, auth), `backend/app/models/` (seven aggregates, enums, timestamp mixin), `backend/migrations/` with two migrations (`3a5e982c3679` creates the 17 tables; `383273c26ef7` adds `alerts.production_order_id`), `backend/app/seed.py` with `database/seeds/01_reference_data.sql`, `database/schema/schema.sql` snapshot, `docs/api/openapi.json`.
 
-Status: complete. Known limits are recorded in `docs/requirements/non-functional-requirements.md` (no request id on successful requests, no rate limiting, no token revocation).
+Status: complete. Login is throttled per username and client address (`core/throttle.py`, NFR-1.11). Known limits are recorded in `docs/requirements/non-functional-requirements.md` (no request id on successful requests, no rate limit on authenticated endpoints, no token revocation).
 
 ## Phase 4: Manufacturing management
 
@@ -46,23 +46,23 @@ Scope: products and specifications, machines and status changes with events, mat
 
 Present: `catalog_service.py`, `production_service.py`, routes `catalog.py` and `production.py`, state machines for machines, orders, and batches in `domain/state_machines.py`, schemas in `schemas/catalog.py` and `schemas/production.py`.
 
-Status: complete. Not in scope and not implemented: deleting any entity through the API, pagination of order and batch lists, order overdue alerts (the `ORDER_OVERDUE` alert type exists but is never raised).
+Status: complete. Order and batch lists are paginated (`GET /production-orders`, `GET /production-batches`: `limit` 1 to 500, default 50, `offset`, response `{items, total, limit, offset}`; `repositories/pagination.py`). `ORDER_OVERDUE` alerts are raised by the on-demand check in `services/alert_service.py` (`POST /analytics/alerts/checks/overdue-orders`, `make check-overdue`; BR-100 to BR-104). Not in scope and not implemented: deleting any entity through the API.
 
 ## Phase 5: Virtual factory
 
 Scope: deterministic simulation engine, catalog loading, five fault models, measurement generation, machine state tracking, alert generation, persistence in one transaction, API endpoint, demo scenario.
 
-Present: `backend/app/simulation/` (config, faults, measurement, machine_state, events, engine), `simulation_service.py`, route `simulation.py`, `database/seeds/demo_scenario.json`, documentation in `docs/simulation/`.
+Present: `backend/app/simulation/` (config, faults, measurement, machine_state, events, engine), `simulation_service.py` (orders, batches, and alerts through the ORM; units, inspections, defects, and events as chunked multi-row inserts), route `simulation.py`, `database/seeds/demo_scenario.json`, `scripts/development/benchmark_simulation.py`, documentation in `docs/simulation/`.
 
 Status: complete. Known limits (see `docs/simulation/simulation-design.md`): `batches_per_order` and `alert_defect_rate` are not exposed through the API; material lots are not consumed; a VARIATION fault is recorded as a `CALIBRATION_DRIFT` event type; duplicate faults at the same batch index are not rejected.
 
 ## Phase 6: Quality and investigation
 
-Scope: inspection recording with server-side evaluation and classification, inspection listing, quality summary, alerts and acknowledgement, investigation engine with rules R1 to R6, evidence cards with SQL and rows, summary builder, investigation lifecycle, SQL query library.
+Scope: inspection recording with server-side evaluation and classification, inspection import from CSV, inspection listing, quality summary, alerts and acknowledgement, investigation engine with rules R1 to R7, evidence cards with SQL and rows, summary builder, investigation lifecycle, SQL query library.
 
-Present: `quality_service.py`, `analytics_service.py`, `investigation_service.py`, `backend/app/investigation/`, routes `quality.py`, `investigations.py`, `analytics.py`, `database/queries/` (nine dashboard queries and three investigation queries), `repositories/sql_loader.py` and `query_runner.py`, documentation in `docs/investigation/investigation-engine.md`.
+Present: `quality_service.py`, `inspection_csv.py` and `inspection_import.py` (`POST /inspections/import`, `docs/quality/inspection-import.md`), `analytics_service.py`, `alert_service.py`, `investigation_service.py`, `backend/app/investigation/`, routes `quality.py`, `investigations.py`, `analytics.py`, `database/queries/` (ten dashboard and traceability queries and four investigation queries), `repositories/sql_loader.py` and `query_runner.py`, documentation in `docs/investigation/investigation-engine.md`.
 
-Status: complete. Planned extensions recorded in the investigation document: per-request thresholds, product-scoped rules, optional narrator.
+Status: complete. R7 (CUSUM onset detection over `investigation/hourly_defect_rates.sql`) was added on 2026-11-07. Planned extensions recorded in the investigation document: per-request thresholds, product-scoped rules, optional narrator.
 
 ## Phase 7: Traceability
 
@@ -70,26 +70,42 @@ Scope: batch to lot junction, forward and backward trace queries and endpoints, 
 
 Present: `traceability_service.py`, route `traceability.py`, quarantine endpoint in `production.py`, queries 04 and 05 and `investigation/shared_material_lots.sql`, documentation in `docs/investigation/traceability-design.md`.
 
-Gaps: release from quarantine is not implemented (`QUARANTINED` is terminal for batches; the code comment says re-inspected material is released by creating a new batch); `CONSUMED` lot status is never set; the user who quarantined is not recorded.
+Gaps: release from quarantine is not implemented (`QUARANTINED` is terminal for batches; the code comment says re-inspected material is released by creating a new batch); the `CONSUMED` lot status exists in `models/enums.py` but no service sets it; the user who quarantined is not recorded. None of these changed on 2026-11-07.
 
 ## Phase 8: Frontend and analytics
 
 Scope: React, TypeScript, Vite, Tailwind, Recharts single-page application with login, overview dashboard, machines, orders, batches, quality, investigations case board, traceability, simulation, and analytics with a SQL explorer; backend analytics endpoints.
 
-Present (backend): analytics endpoints for the query catalogue (`QueryCatalogEntry`, 12 entries, 7 runnable), parameterised query execution (`QueryResult`), alerts, and acknowledgement (Operator guard). Present (frontend): React 19, TypeScript, Vite 7, Tailwind 4, React Router 7, TanStack Query 5, and Recharts 3 with a screen for each of Login, Overview, Machines, Orders, Batches, Inspections, Traceability, Investigations list, Investigation detail (case board with evidence cards and show-the-SQL), Analytics (charts plus SQL explorer), and Simulation, under `frontend/src/features/*`, with shared UI and chart components, hooks, services, types, and utilities.
+Present (backend): analytics endpoints for the query catalogue (`QueryCatalogEntry`, 14 entries, 8 runnable), parameterised query execution (`QueryResult`, including query 10 `characteristic_control_chart` with `specification_id`), `GET /specifications` for the control chart picker, paginated alerts, acknowledgement (Operator guard), and the overdue order check. Present (frontend): React 19, TypeScript, Vite 7, Tailwind 4, React Router 7, TanStack Query 5, and Recharts 3 with a screen for each of Login, Overview, Machines, Orders, Batches, Inspections (with the CSV import panel), Traceability, Investigations list, Investigation detail (case board with evidence cards and show-the-SQL), Analytics (charts, the per-characteristic control chart, and the SQL explorer), and Simulation, under `frontend/src/features/*`, with shared UI and chart components, hooks, services, types, and utilities; the list screens read the page envelope of the paginated endpoints.
 
-Status: complete. `pnpm test` (13 files, 39 tests), `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, and `pnpm build` passed in the last run. Nine screenshots of the running screens were captured on 2026-11-03 (docs/media/screenshots).
+Status: complete. `pnpm test` ran 18 files and 76 tests, all passing, on 2026-11-07 in this checkout; `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, and `pnpm build` passed in the last recorded run. Nine screenshots of the running screens were captured on 2026-11-03 (docs/media/screenshots).
 
 ## Phase 9: Validation
 
 Scope: automated tests (unit, API, database integration, simulation, business rule, investigation, end-to-end), the twelve required scenarios, test matrix with recorded results, continuous integration, screenshots and demonstration videos, final review of documentation against code.
 
-Present: backend tests under `backend/tests/{unit,api,integration}/` (`uv run pytest`: 100 passed, 95 percent coverage of `app`), frontend tests colocated under `frontend/src` with `frontend/tests/setup.ts` (`pnpm test`: 13 files, 39 tests passed), the CI workflows in `.github/workflows/`, `docs/testing/testing-strategy.md`, `docs/testing/test-matrix.md` (results recorded where an automated test covers the scenario), `docs/media/media-plan.md` (nine screenshots captured; no video yet).
+Present: backend tests under `backend/tests/{unit,api,integration}/` (199 tests collected on 2026-11-07, including `test_pagination_api.py`, `test_inspection_csv.py`, `test_inspection_import.py`, `test_alert_rules.py`, `test_alert_checks_api.py`, `test_alert_order_link.py`, `test_login_throttle.py`, and `test_login_throttle_api.py`; the last recorded full run with results, on 2026-11-03, reported 100 passed with 95 percent coverage of `app` before these modules existed), frontend tests colocated under `frontend/src` with `frontend/tests/setup.ts` (`pnpm test`: 18 files, 76 tests passed on 2026-11-07), end-to-end browser tests under `frontend/e2e` (Playwright Test, five spec files: login, roles, investigation, traceability, analytics; `pnpm test:e2e` starts the backend on port 8013 and Vite on port 5183), the five CI workflows in `.github/workflows/`, `docs/testing/testing-strategy.md`, `docs/testing/test-matrix.md` (results recorded where an automated test covers the scenario), `docs/media/media-plan.md` (nine screenshots captured; the walkthrough video is in progress).
 
-Status: in progress. Next steps in order: execute the Docker path and the GitHub Actions workflows and record the outcome; cover the matrix rows marked as not covered by an automated test; add end-to-end tests under the root `tests/` directory; capture screenshots and videos from the running application.
+Gaps: the full backend suite, the Compose Smoke workflow, and the End-to-End workflow have not been observed green from this checkout since the 2026-11-07 changes, and no run ids for them are recorded here; the matrix rows marked as not covered by an automated test remain; the walkthrough video is being produced.
+
+Status: in progress. Next steps in order: observe the five workflows on the next push and record the outcome in `docs/testing/test-matrix.md`; cover the matrix rows not yet covered by an automated test; finish the walkthrough video; final review of documentation against code.
+
+## Roadmap items added after the Week 10 report
+
+| Item | Status on 2026-11-07 | Where |
+|------|----------------------|-------|
+| Pagination of list endpoints | Implemented | `repositories/pagination.py`, `schemas/common.py::Page`, six routes; `tests/api/test_pagination_api.py` |
+| CSV inspection import | Implemented | `POST /inspections/import`, `services/inspection_csv.py`, `services/inspection_import.py`, `frontend/src/features/quality/ImportInspectionsPanel.tsx`; `docs/quality/inspection-import.md` |
+| ORDER_OVERDUE alerts | Implemented | `services/alert_service.py`, `jobs/check_overdue_orders.py`, migration `383273c26ef7`; BR-100 to BR-104 |
+| Per-characteristic control chart | Implemented | `database/queries/10_characteristic_control_chart.sql`, `GET /specifications`, `frontend/src/features/analytics/ControlChartPanel.tsx` |
+| CUSUM onset rule (R7) | Implemented | `investigation/rules.py::rule_cusum_onset`, `database/queries/investigation/hourly_defect_rates.sql` |
+| Login throttle | Implemented | `core/throttle.py`; NFR-1.11, `SECURITY.md` |
+| Bulk-insert simulation persistence | Implemented | `simulation_service._bulk_insert`; figures in `docs/simulation/simulation-design.md` |
+| End-to-end tests and Compose Smoke in CI | Implemented | `frontend/e2e`, `.github/workflows/e2e.yml`, `.github/workflows/compose-smoke.yml` |
+| Walkthrough video | In progress | `docs/media/media-plan.md` |
 
 ## Dependencies between remaining work
 
-1. Screenshots and videos (phase 9 media) need the backend and frontend running against the demo data.
-2. The three CI workflows ran green on the first push to GitHub on 2026-11-04 (Backend CI run 41779775539, Frontend CI run 41779775057, Docs Lint run 41779775596; see https://github.com/shritej6/factory-sherlock/actions). The backend job created the databases with the setup script, applied the migration, and ran the full suite against the MySQL 8.4 service container.
-3. Confirming the Docker path requires a machine with Docker installed.
+1. The walkthrough video (phase 9 media) needs the backend and frontend running against the demo data.
+2. The three original CI workflows ran green on the first push to GitHub on 2026-11-04 (Backend CI run 41779775539, Frontend CI run 41779775057, Docs Lint run 41779775596; see https://github.com/shritej6/factory-sherlock/actions). The backend job created the databases with the setup script, applied the migration, and ran the full suite against the MySQL 8.4 service container. Compose Smoke and End-to-End were added on 2026-11-07 and run on push; their results will be recorded in `docs/testing/test-matrix.md` once observed.
+3. The Docker path is verified by the Compose Smoke workflow, so no local Docker installation is needed to confirm it.
