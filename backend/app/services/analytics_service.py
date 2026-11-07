@@ -20,6 +20,12 @@ DASHBOARD_QUERIES = {
     "production_performance": ("limit",),
     "batches_requiring_review": ("window_start", "window_end", "threshold", "machine_id"),
     "quality_after_machine_events": ("machine_id", "window_start", "window_end", "hours"),
+    "characteristic_control_chart": (
+        "specification_id",
+        "window_start",
+        "window_end",
+        "machine_id",
+    ),
 }
 
 
@@ -34,6 +40,8 @@ def run_dashboard_query(session: Session, name: str, params: dict[str, Any]) -> 
     allowed = DASHBOARD_QUERIES[name]
     if "window_end" in allowed and params["window_end"] <= params["window_start"]:
         raise ValidationError("window_end must be after window_start")
+    if "specification_id" in allowed and params.get("specification_id") is None:
+        raise ValidationError("specification_id is required for this query")
     bound = {k: params.get(k) for k in allowed}
     rows = SqlQueryRunner(session).run(name, bound)
     return {"query": name, "sql": load_sql(name), "params": _jsonable(bound), "rows": rows}

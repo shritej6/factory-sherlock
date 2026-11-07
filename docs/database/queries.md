@@ -17,11 +17,12 @@ This document explains each query and records real results obtained by running t
 | `07_order_completion_summary.sql` | `order_completion_summary` | dashboard |
 | `08_batches_requiring_review.sql` | `batches_requiring_review` | dashboard, rule R5 |
 | `09_daily_production_trend.sql` | `daily_production_trend` | dashboard |
+| `10_characteristic_control_chart.sql` | `characteristic_control_chart` | dashboard (control chart) |
 | `investigation/defect_onset.sql` | `investigation.defect_onset` | rule R3 |
 | `investigation/machine_events_before_onset.sql` | `investigation.machine_events_before_onset` | rule R4 |
 | `investigation/shared_material_lots.sql` | `investigation.shared_material_lots` | rule R6 |
 
-"Dashboard" means `analytics_service.DASHBOARD_QUERIES`, served by `GET /analytics/queries/{name}` with `window_start`, `window_end`, `machine_id`, `threshold`, `hours`, and `limit` query parameters (defaults: a 30-day window ending tomorrow, threshold 0.10, hours 3, limit 50). The rules are in `backend/app/investigation/rules.py`. Investigation rules use `RuleThresholds` defaults: batch review rate 0.10, event lookback 6 hours, event comparison 3 hours.
+"Dashboard" means `analytics_service.DASHBOARD_QUERIES`, served by `GET /analytics/queries/{name}` with `window_start`, `window_end`, `machine_id`, `specification_id`, `threshold`, `hours`, and `limit` query parameters (defaults: a 30-day window ending tomorrow, threshold 0.10, hours 3, limit 50). `specification_id` has no default: the endpoint answers 422 when a query that lists it (query 10) is run without it. The ids come from `GET /specifications`, a flat list of every product's specifications with `product_code`. The rules are in `backend/app/investigation/rules.py`. Investigation rules use `RuleThresholds` defaults: batch review rate 0.10, event lookback 6 hours, event comparison 3 hours.
 
 All time windows are half-open: `>= :window_start AND < :window_end`.
 
@@ -268,6 +269,52 @@ Rows are ordered by product code because that is the grouping column.
 CNC-03 shows 45 failed units for 46 failed inspections: one unit failed both of its characteristics.
 
 **Performance.** `EXPLAIN` at demo volume (all 700 units inside the four-day window) starts from `machines` (index scan on `code`, 3 rows, Using temporary; Using filesort), reaches batches by `ref` on `ix_production_batches_machine_time`, units by `ref` on `uq_unit_batch_sequence` with the `produced_at` filter as `Using where`, and inspections by `ref` on `uq_inspection_unit_spec`. `ix_production_units_produced_at` is in `possible_keys` but not chosen when every unit is inside the window; with a one-hour window (`2026-11-02 10:00` to `11:00`) `EXPLAIN` shows a `range` scan on that index (120 rows, Using index) followed by `eq_ref` lookups to batches and machines. See [database-design.md](database-design.md), section 6.
+
+## Query 10: Per-characteristic control chart
+
+**Business question.** For one measured characteristic, how did the batch mean and the within-batch spread move over a window, and which batches fall outside the three-sigma control limits computed from that window?
+
+**Tables.** inspections, production_units, production_batches, machines, product_specifications.
+
+**Techniques.** Three chained CTEs: `window_inspections` applies the specification, time, and optional machine filters and joins up to batches and machines; `subgroups` aggregates per batch (`COUNT`, `SUM`, `AVG`, `VAR_SAMP`, `STDDEV_SAMP`, `MIN`, `MAX`), the batch being the subgroup of a classic X-bar and S chart; `limits` adds window functions `SUM(...) OVER ()` and `AVG(...) OVER ()` so the control limits are computed once over every subgroup in the window and repeated on each row. `STDDEV_SAMP` and `VAR_SAMP` return NULL for a subgroup with one sample, which `SUM OVER` skips. The optional machine filter uses the same `(:machine_id IS NULL OR b.machine_id = :machine_id)` pattern as query 08. The specification row is joined by the constant `:specification_id` for the reference columns.
+
+**Formula.** With `n_i` the sample count and `s_i` the `STDDEV_SAMP` of subgroup `i`:
+
+- `grand_mean = SUM(measured_value) / COUNT(*)` over every inspection in the window, which equals the sample-size-weighted mean of the subgroup means.
+- `pooled_std_dev = SQRT( SUM((n_i - 1) * s_i^2) / SUM(n_i - 1) )` over the subgroups with `n_i >= 2`.
+- `avg_sample_size = AVG(n_i)` over every subgroup.
+- `ucl = grand_mean + 3 * pooled_std_dev / SQRT(avg_sample_size)` and `lcl = grand_mean - 3 * pooled_std_dev / SQRT(avg_sample_size)`.
+
+No c4 bias correction is applied and no S-chart limits (B3 and B4 factors) are computed; `std_dev` is returned per subgroup for plotting. When every subgroup in the window has a single sample, `pooled_std_dev` has no denominator and `ucl` and `lcl` are NULL. `mean_value`, `std_dev`, `grand_mean`, `ucl`, and `lcl` are rounded to four places; `min_value`, `max_value`, `target_value`, and the specification limits are exact `DECIMAL(10,3)` values. The limits describe the window as a whole, so a window that contains a drift (as the demo does) produces wider limits than the stable part of the process alone would.
+
+**Parameters.** `:specification_id` (required), `:window_start`, `:window_end` (half-open on `inspected_at`), `:machine_id` (NULL for all machines).
+
+**Result.** One row per batch with at least one inspection of the specification inside the window, ordered by `subgroup_start` then `batch_id`: `batch_id`, `batch_number`, `machine_code`, `subgroup_start` (the batch `started_at`), `sample_count`, `mean_value`, `std_dev`, `min_value`, `max_value`, `target_value`, `lower_spec_limit` (`target_value - tolerance`), `upper_spec_limit` (`target_value + tolerance`), `grand_mean`, `ucl`, `lcl`. A batch whose inspections straddle a window edge contributes only the inspections inside the window, so its `sample_count` is smaller than the batch quantity.
+
+**Used by.** Dashboard (control chart screen) and the SQL explorer.
+
+**Result captured** with `:specification_id = 5` (STEEL-SHAFT `diameter`, target 20.000 mm, tolerance 0.100 mm), the window above, `:machine_id = NULL`:
+
+| batch_id | batch_number | machine_code | subgroup_start | sample_count | mean_value | std_dev | min_value | max_value | target_value | lower_spec_limit | upper_spec_limit | grand_mean | ucl | lcl |
+|---------:|--------------|--------------|----------------|-------------:|-----------:|--------:|----------:|----------:|-------------:|-----------------:|-----------------:|-----------:|------:|------:|
+| 24 | SIM0001-CNC-03-01-B01 | CNC-03 | 2026-11-02 06:00:00 | 20 | 19.9906 | 0.0406 | 19.914 | 20.065 | 20.000 | 19.900 | 20.100 | 20.0442 | 20.0653 | 20.0231 |
+| 25 | SIM0001-CNC-03-01-B02 | CNC-03 | 2026-11-02 06:30:00 | 20 | 20.0090 | 0.0364 | 19.931 | 20.068 | 20.000 | 19.900 | 20.100 | 20.0442 | 20.0653 | 20.0231 |
+| 26 | SIM0001-CNC-03-01-B03 | CNC-03 | 2026-11-02 07:00:00 | 20 | 20.0112 | 0.0344 | 19.912 | 20.066 | 20.000 | 19.900 | 20.100 | 20.0442 | 20.0653 | 20.0231 |
+| 27 | SIM0001-CNC-03-01-B04 | CNC-03 | 2026-11-02 07:30:00 | 20 | 19.9940 | 0.0249 | 19.951 | 20.040 | 20.000 | 19.900 | 20.100 | 20.0442 | 20.0653 | 20.0231 |
+| 28 | SIM0001-CNC-03-02-B01 | CNC-03 | 2026-11-02 08:00:00 | 20 | 19.9964 | 0.027 | 19.958 | 20.064 | 20.000 | 19.900 | 20.100 | 20.0442 | 20.0653 | 20.0231 |
+| 29 | SIM0001-CNC-03-02-B02 | CNC-03 | 2026-11-02 08:30:00 | 20 | 20.0257 | 0.0225 | 19.989 | 20.075 | 20.000 | 19.900 | 20.100 | 20.0442 | 20.0653 | 20.0231 |
+| 30 | SIM0001-CNC-03-02-B03 | CNC-03 | 2026-11-02 09:00:00 | 20 | 20.0426 | 0.0317 | 19.999 | 20.101 | 20.000 | 19.900 | 20.100 | 20.0442 | 20.0653 | 20.0231 |
+| 31 | SIM0001-CNC-03-02-B04 | CNC-03 | 2026-11-02 09:30:00 | 20 | 20.0470 | 0.0282 | 19.987 | 20.095 | 20.000 | 19.900 | 20.100 | 20.0442 | 20.0653 | 20.0231 |
+| 32 | SIM0001-CNC-03-03-B01 | CNC-03 | 2026-11-02 10:00:00 | 20 | 20.0758 | 0.0328 | 20.013 | 20.130 | 20.000 | 19.900 | 20.100 | 20.0442 | 20.0653 | 20.0231 |
+| 33 | SIM0001-CNC-03-03-B02 | CNC-03 | 2026-11-02 10:30:00 | 20 | 20.0970 | 0.0318 | 20.045 | 20.151 | 20.000 | 19.900 | 20.100 | 20.0442 | 20.0653 | 20.0231 |
+| 34 | SIM0001-CNC-03-03-B03 | CNC-03 | 2026-11-02 11:00:00 | 20 | 20.1111 | 0.0326 | 20.069 | 20.197 | 20.000 | 19.900 | 20.100 | 20.0442 | 20.0653 | 20.0231 |
+| 35 | SIM0001-CNC-03-03-B04 | CNC-03 | 2026-11-02 11:30:00 | 20 | 20.1301 | 0.0299 | 20.041 | 20.178 | 20.000 | 19.900 | 20.100 | 20.0442 | 20.0653 | 20.0231 |
+
+Only CNC-03 appears because it is the only machine that makes the steel shaft, so `:machine_id = 3` returns the same twelve rows and `:machine_id = 1` returns none. The within-batch spread stays between 0.0225 and 0.0406 mm throughout, while the batch mean drifts from 19.99 mm to 20.13 mm after the 08:00 tool-wear event: the first five batches sit below `lcl`, batches 29 to 31 are inside the limits, and the last four are above `ucl`, which is the pattern of a shifting mean with a stable spread. The limits are narrow (0.042 mm wide) because the pooled standard deviation is divided by `SQRT(20)`. The batch mean starts climbing at 08:30 (batch 29), one batch before the first failing unit (batch 30, `max_value` 20.101) and three batches before the first batch that query 08 flags for review at 10:00. `std_dev` for batch 28 prints as 0.027 because `STDDEV_SAMP` returns a DOUBLE and `ROUND` drops the trailing zero.
+
+With a one-hour window (`2026-11-02 10:00` to `11:00`) the query returns three rows: batch 31 with `sample_count` 1 (its last unit was inspected exactly at 10:00) and a NULL `std_dev`, batch 32 with 20 samples, and batch 33 with 19 (its last unit falls on 11:00, outside the half-open window). This shows the edge behaviour: subgroups are cut at the window boundary rather than extended beyond it.
+
+**Performance.** `EXPLAIN` at demo volume with `:machine_id = NULL` and the four-day window reads `inspections` by `ref` on the `specification_id` foreign-key index (240 rows, time predicate as `Using where`, `Using temporary` for the `GROUP BY`), then `production_units`, `production_batches`, and `machines` by `eq_ref` on their primary keys, and `product_specifications` as `const`; the final `ORDER BY` is a filesort over the subgroup rows. `ix_inspections_time_result` is in `possible_keys` but not chosen while the window covers most of the table, and it is still not chosen for a one-hour window because the demo records about 240 inspections per hour across all six specifications, so neither predicate is more selective. With a ten-minute window the optimizer switches to a `range` scan on `ix_inspections_time_result` (42 rows, `Using index condition`) and applies the specification filter as `Using where`, which is the production case where the window is small relative to history. With `:machine_id = 3` the plan starts from `machines` (`const`) and reads `production_batches` by `ref` on `ix_production_batches_machine_time` (12 rows, `Using index condition`), `production_units` by `ref` on `uq_unit_batch_sequence` (`Using index`), and `inspections` by `eq_ref` on `uq_inspection_unit_spec` with the time filter as `Using where`. The window functions run over the subgroup set, at most one row per batch.
 
 ## Investigation query: defect_onset
 

@@ -28,6 +28,18 @@ class SpecificationRead(ApiModel):
     unit: str
 
 
+class SpecificationListItem(ApiModel):
+    """One specification with its product code, for pickers such as the control chart."""
+
+    id: int
+    product_id: int
+    product_code: str
+    characteristic: str
+    target_value: Decimal
+    tolerance: Decimal
+    unit: str
+
+
 class ProductCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
