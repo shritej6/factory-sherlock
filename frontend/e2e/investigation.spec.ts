@@ -12,7 +12,7 @@ interface Batch {
   started_at: string;
 }
 
-const RULE_CODES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6'];
+const RULE_CODES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7'];
 
 /**
  * The demo scenario covers one production day. Read that day from CNC-03's first
@@ -41,7 +41,7 @@ test('an engineer opens, reviews, and closes an investigation on CNC-03', async 
 
   await signIn(page, 'engineer');
   await page
-    .getByRole('complementary', { name: 'Primary' })
+    .getByRole('navigation', { name: 'Primary' })
     .getByRole('link', { name: 'Investigations' })
     .click();
   await page.getByRole('button', { name: 'Open investigation' }).click();
@@ -61,7 +61,7 @@ test('an engineer opens, reviews, and closes an investigation on CNC-03', async 
   await expect(summary).toContainText('elevated defect rate');
   await expect(summary.getByText('Open', { exact: true })).toBeVisible();
 
-  // The first six cards are R1 to R6 in order; the total is not asserted because
+  // The first seven cards are R1 to R7 in order; the total is not asserted because
   // further rules may be added.
   const cards = page.getByTestId('evidence-card');
   await expect(cards.first()).toBeVisible();
