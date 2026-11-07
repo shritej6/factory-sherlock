@@ -2,6 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 
 import pytest
+from app.domain.quality_rules import defect_rate
 from app.models.enums import InspectionResult, MachineEventType, MachineStatus
 from app.simulation.config import (
     Catalog,
@@ -128,3 +129,35 @@ def test_downtime_after_tool_wear_returns_to_warning() -> None:
     states = [c.new for c in out.state_changes if c.machine_id == 1]
     assert states[-1] is MachineStatus.WARNING
     assert out.final_states[1] is MachineStatus.WARNING
+
+
+def test_high_defect_rate_alert_is_raised_once_per_consecutive_run() -> None:
+    """Once a batch reaches 0.15 the alert fires; later batches in the same run stay silent."""
+    fault = FaultScenario("CNC-01", FaultKind.TOOL_WEAR, 1)
+    out = run(units=40, faults=(fault,))
+    cnc1 = [b for b in out.batches if b.machine_id == 1]
+    rates = [defect_rate(b.failed, b.inspected) for b in cnc1]
+    first_bad = next(i for i, r in enumerate(rates) if r >= 0.15)
+    assert all(r >= 0.15 for r in rates[first_bad:]), rates  # tool wear only gets worse
+    alerts = [a for a in out.alerts if a.alert_type.value == "HIGH_DEFECT_RATE"]
+    assert [a.machine_id for a in alerts] == [1]
+    assert alerts[0].message.startswith(f"Batch {first_bad + 1} on CNC-01 failed")
+    assert alerts[0].at == cnc1[first_bad].completed_at
+
+
+def test_catalog_and_config_invariants_are_enforced() -> None:
+    machines = (MachineRef(1, "CNC-01"),)
+    with pytest.raises(ValueError, match="at least one product and one machine"):
+        Catalog(products=(), machines=machines)
+    with pytest.raises(ValueError, match="at least one product and one machine"):
+        Catalog(products=catalog().products, machines=())
+    no_lots = ProductRef(9, "BARE", catalog().products[0].specs, ())
+    with pytest.raises(ValueError, match="BARE needs specifications and material lots"):
+        Catalog(products=(no_lots,), machines=machines)
+    no_specs = ProductRef(9, "BARE", (), (1,))
+    with pytest.raises(ValueError, match="BARE needs specifications and material lots"):
+        Catalog(products=(no_specs,), machines=machines)
+    with pytest.raises(ValueError, match="minutes_per_batch"):
+        SimulationConfig(seed=1, start_time=START, minutes_per_batch=0)
+    with pytest.raises(ValueError, match="units_per_batch"):
+        SimulationConfig(seed=1, start_time=START, units_per_batch=0)

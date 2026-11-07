@@ -9,6 +9,7 @@ from app.investigation.engine import investigate
 from app.investigation.rules import InvestigationContext, RuleThresholds, rule_cusum_onset
 
 WINDOW = (datetime(2026, 11, 2), datetime(2026, 11, 4))
+CAUSAL_WORDS = ("caused", "because", "due to", "proves", "resulted in")
 
 
 class FakeRunner:
@@ -258,3 +259,78 @@ def test_cusum_narrative_never_uses_causal_language(failed_per_hour: list[int]) 
         assert card is not None
         lowered = card.narrative.lower()
         assert "caused" not in lowered and "because" not in lowered
+
+
+def _cnc3_context() -> InvestigationContext:
+    return InvestigationContext(
+        machine_id=3, machine_code="CNC-03", window_start=WINDOW[0], window_end=WINDOW[1]
+    )
+
+
+@pytest.mark.parametrize(
+    ("rate", "fleet", "elevated"),
+    [
+        (0.05, 0.025, True),  # exactly the minimum rate and exactly twice the fleet
+        (0.0499, 0.01, False),  # below the minimum rate although far above the fleet
+        (0.05, 0.0251, False),  # at the minimum rate but less than twice the fleet
+        (0.05, 0.0, True),  # a zero fleet rate counts as elevated at the minimum
+        (0.5, 0.3, False),  # high in absolute terms but in line with the fleet
+    ],
+)
+def test_elevation_threshold_boundaries(rate: float, fleet: float, elevated: bool) -> None:
+    data = elevated_dataset()
+    for row in data["machine_defect_rate_comparison"]:
+        row["fleet_defect_rate"] = fleet
+    data["machine_defect_rate_comparison"][0]["defect_rate"] = rate
+    ctx = _cnc3_context()
+    investigate(ctx, FakeRunner(data))
+    assert ctx.elevated is elevated
+
+
+def test_onset_is_the_first_bucket_at_or_above_ten_percent() -> None:
+    data = elevated_dataset()
+    buckets = [("08", 0.0999, None), ("09", 0.1, 0.0999), ("10", 0.4, 0.1)]
+    data["investigation.defect_onset"] = [
+        {
+            "bucket_start": f"2026-11-02T{hour}:00:00",
+            "inspected": 20,
+            "failed": int(rate * 20),
+            "defect_rate": rate,
+            "previous_bucket_rate": previous,
+            "cumulative_rate": rate,
+        }
+        for hour, rate, previous in buckets
+    ]
+    runner = FakeRunner(data)
+    ctx = _cnc3_context()
+    investigate(ctx, runner)
+    assert ctx.onset_time == datetime(2026, 11, 2, 9)
+    calls = dict(runner.calls)
+    assert calls["investigation.machine_events_before_onset"] == {
+        "machine_id": 3,
+        "onset_time": datetime(2026, 11, 2, 9),
+        "lookback_hours": 6,
+    }
+    assert calls["batches_requiring_review"]["threshold"] == 0.10
+    assert calls["batches_requiring_review"]["machine_id"] == 3
+
+
+def test_no_onset_skips_the_event_rule_and_says_so() -> None:
+    data = elevated_dataset()
+    for row in data["investigation.defect_onset"]:
+        row["defect_rate"] = 0.05
+    report = investigate(_cnc3_context(), FakeRunner(data))
+    codes = [e.rule_code for e in report.evidence]
+    assert "R3" in codes and "R4" not in codes
+    r3 = next(e for e in report.evidence if e.rule_code == "R3")
+    assert "never reached 10.0%" in r3.narrative
+
+
+def test_narratives_and_summary_never_assert_causation() -> None:
+    report = investigate(_cnc3_context(), FakeRunner(elevated_dataset()))
+    for sentence in [report.summary, *(e.narrative for e in report.evidence)]:
+        lowered = sentence.lower()
+        assert not any(word in lowered for word in CAUSAL_WORDS), sentence
+    r4 = next(e for e in report.evidence if e.rule_code == "R4")
+    assert "does not prove a cause" in r4.narrative
+    assert "does not establish one" in report.summary
