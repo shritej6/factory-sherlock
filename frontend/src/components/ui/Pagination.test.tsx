@@ -27,6 +27,25 @@ describe('Pagination', () => {
     expect(screen.getByText('Showing 101 to 120 of 120')).toBeInTheDocument();
   });
 
+  it('clamps back to the last page with rows when the offset runs past the total', () => {
+    const onChange = setup({ total: 100, limit: 50, offset: 100 });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith({ limit: 50, offset: 50 });
+    expect(screen.getByText('Showing 51 to 100 of 100')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+  });
+
+  it('returns to the first page when a single remaining row sits before the offset', () => {
+    const onChange = setup({ total: 1, limit: 25, offset: 75 });
+    expect(onChange).toHaveBeenCalledWith({ limit: 25, offset: 0 });
+    expect(screen.getByText('Showing 1 to 1 of 1')).toBeInTheDocument();
+  });
+
+  it('leaves a valid offset alone', () => {
+    const onChange = setup({ total: 120, limit: 50, offset: 100 });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it('disables previous on the first page and next on the last page', () => {
     setup({ total: 120, limit: 50, offset: 0 });
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();

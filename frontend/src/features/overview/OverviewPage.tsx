@@ -7,12 +7,12 @@ import { Panel } from '@/components/ui/Panel';
 import { StatTile } from '@/components/ui/StatTile';
 import { EmptyState, ErrorState, InlineNotice, LoadingState } from '@/components/ui/States';
 import {
-  LOOKUP_PAGE,
   useAlerts,
   useCheckOverdueOrders,
   useInvestigations,
   useMachines,
-  useOrderCounts,
+  useOpenInvestigationCount,
+  useOrderStatusCounts,
   useQualitySummary,
 } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
@@ -30,6 +30,8 @@ import { MachineStatusCard } from './MachineStatusCard';
  */
 const ALERT_PAGE_SIZE = 10;
 const ALERT_PAGE_SIZES: readonly number[] = [10, 25, 50];
+/** The investigations panel lists the newest few cases; the open count comes from a filtered total. */
+const RECENT_INVESTIGATIONS = { limit: 5, offset: 0 };
 
 const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
@@ -45,16 +47,17 @@ export function OverviewPage() {
   const { can } = useAuth();
   const machines = useMachines();
   const summary = useQualitySummary();
-  const orderCounts = useOrderCounts(['RELEASED', 'IN_PROGRESS']);
+  const orderCounts = useOrderStatusCounts();
   const { page: alertPage, setPage: setAlertPage } = usePageState(ALERT_PAGE_SIZE);
   const alerts = useAlerts(alertPage);
   const overdueCheck = useCheckOverdueOrders();
-  const investigations = useInvestigations(LOOKUP_PAGE);
+  const investigations = useInvestigations(RECENT_INVESTIGATIONS);
+  const openInvestigations = useOpenInvestigationCount();
 
   const activeOrders = orderCounts.data
     ? orderCounts.data.RELEASED + orderCounts.data.IN_PROGRESS
     : undefined;
-  const openInvestigations = investigations.data?.items.filter((i) => i.status !== 'CLOSED').length;
+  const investigationsError = investigations.error ?? openInvestigations.error;
 
   return (
     <>
@@ -178,17 +181,22 @@ export function OverviewPage() {
             </Link>
           }
         >
-          {investigations.isPending && <LoadingState label="Loading investigations" />}
-          {investigations.isError && (
+          {(investigations.isPending || openInvestigations.isPending) && (
+            <LoadingState label="Loading investigations" />
+          )}
+          {investigationsError && (
             <ErrorState
-              error={investigations.error}
-              onRetry={() => void investigations.refetch()}
+              error={investigationsError}
+              onRetry={() => {
+                void investigations.refetch();
+                void openInvestigations.refetch();
+              }}
             />
           )}
-          {investigations.data && (
+          {investigations.data && openInvestigations.data !== undefined && (
             <div className="flex flex-col gap-3">
               <p className="text-3xl font-semibold text-ink">
-                {formatNumber(openInvestigations ?? 0)}
+                {formatNumber(openInvestigations.data)}
                 <span className="ml-2 text-sm font-normal text-ink-muted">open or in review</span>
               </p>
               {investigations.data.items.length === 0 ? (
@@ -198,7 +206,7 @@ export function OverviewPage() {
                 />
               ) : (
                 <ul className="divide-y divide-border text-sm">
-                  {investigations.data.items.slice(0, 5).map((inv) => (
+                  {investigations.data.items.map((inv) => (
                     <li key={inv.id} className="py-2">
                       <Link
                         to={`/investigations/${inv.id}`}

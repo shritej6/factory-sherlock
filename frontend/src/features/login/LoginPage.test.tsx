@@ -83,4 +83,35 @@ describe('LoginPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password');
     expect(tokenStore.get()).toBeNull();
   });
+
+  async function submitAgainst(status: number, body: Record<string, unknown>) {
+    mockFetch([[/\/auth\/login$/, () => jsonResponse(body, status)]]);
+    renderLogin();
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/username/i), 'viewer');
+    await user.type(screen.getByLabelText(/password/i), 'wrong');
+    await user.click(screen.getByRole('button', { name: /sign in/i }));
+    return screen.findByRole('alert');
+  }
+
+  it('tells a throttled user how long to wait, from details.retry_after_seconds', async () => {
+    const alert = await submitAgainst(429, {
+      error: 'RateLimitedError',
+      message: 'Too many failed login attempts. Try again later.',
+      details: { retry_after_seconds: 42 },
+      request_id: 'req-429',
+    });
+    expect(alert).toHaveTextContent('Too many attempts. Try again in 42 seconds.');
+    expect(alert).not.toHaveTextContent('Try again later');
+    expect(alert).toHaveTextContent('Request id req-429');
+  });
+
+  it('falls back to the backend message when a 429 has no wait time', async () => {
+    const alert = await submitAgainst(429, {
+      error: 'RateLimitedError',
+      message: 'Too many failed login attempts. Try again later.',
+      details: {},
+    });
+    expect(alert).toHaveTextContent('Too many failed login attempts. Try again later.');
+  });
 });

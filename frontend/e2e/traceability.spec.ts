@@ -19,7 +19,24 @@ interface ForwardTrace {
   batches: { batch_number: string; machine_code: string }[];
 }
 
-async function traceLot(page: Page, lotNumber: string): Promise<Locator> {
+/** Fails with a data message instead of a UI timeout when the lot is missing from the seed. */
+async function assertLotExists(request: APIRequestContext, lotNumber: string): Promise<void> {
+  const token = await apiToken(request, 'engineer');
+  const lots = await apiGet<MaterialLot[]>(request, token, '/material-lots');
+  if (!lots.some((lot) => lot.lot_number === lotNumber)) {
+    throw new Error(
+      `Material lot ${lotNumber} is not in the database. ` +
+        'Seed the demo scenario (see frontend/e2e/README.md) and run again.',
+    );
+  }
+}
+
+async function traceLot(
+  page: Page,
+  request: APIRequestContext,
+  lotNumber: string,
+): Promise<Locator> {
+  await assertLotExists(request, lotNumber);
   const form = page.getByRole('form', { name: 'Trace lot' });
   await form.getByLabel('Lot number').fill(lotNumber);
   await form.getByRole('button', { name: 'Trace lot' }).click();
@@ -80,11 +97,12 @@ async function pickQuarantineCandidate(
 test.describe('traceability', () => {
   test(`forward trace of lot ${TRACED_LOT} lists its batches with unit counts`, async ({
     page,
+    request,
   }) => {
     await signIn(page, 'engineer');
     await page.goto('/traceability');
 
-    const table = await traceLot(page, TRACED_LOT);
+    const table = await traceLot(page, request, TRACED_LOT);
     const rows = bodyRows(table);
     await expect(rows.first()).toBeVisible();
     expect(await rows.count()).toBeGreaterThan(0);
@@ -100,11 +118,12 @@ test.describe('traceability', () => {
 
   test(`backward trace of a unit from lot ${TRACED_LOT} shows its lot and inspections`, async ({
     page,
+    request,
   }) => {
     await signIn(page, 'engineer');
     await page.goto('/traceability');
 
-    const table = await traceLot(page, TRACED_LOT);
+    const table = await traceLot(page, request, TRACED_LOT);
     const batchColumn = await columnIndex(table, 'Batch');
     const batchNumber = await bodyRows(table)
       .first()

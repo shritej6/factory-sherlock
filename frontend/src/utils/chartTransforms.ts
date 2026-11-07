@@ -111,14 +111,16 @@ export interface ControlChartPoint {
   stdDev: number | null;
   min: number;
   max: number;
-  /** True when the mean lies outside the control limits; always false while the limits are null. */
+  /** This subgroup's limits, grand_mean +/- 3 * pooled_sd / sqrt(sample_count); null without a pooled sd. */
+  ucl: number | null;
+  lcl: number | null;
+  /** True when the mean lies outside this subgroup's control limits; false while they are null. */
   outOfControl: boolean;
 }
 
+/** Values that are the same on every row of one query result. */
 export interface ControlChartLimits {
   grandMean: number | null;
-  ucl: number | null;
-  lcl: number | null;
   target: number | null;
   lowerSpec: number | null;
   upperSpec: number | null;
@@ -127,6 +129,8 @@ export interface ControlChartLimits {
 export interface ControlChartSeries {
   points: ControlChartPoint[];
   limits: ControlChartLimits;
+  /** True when at least one subgroup carries control limits. */
+  hasControlLimits: boolean;
   /** Y axis bounds padded around the control limits, the specification limits, and the means. */
   domain: [number, number];
   /** Evenly spaced round tick values that span the domain. */
@@ -139,10 +143,12 @@ function numberOrNull(value: ResultRow[string] | undefined): number | null {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function toControlChartPoint(row: ResultRow, limits: ControlChartLimits): ControlChartPoint {
+function toControlChartPoint(row: ResultRow): ControlChartPoint {
   const mean = numberOrNull(row.mean_value) ?? 0;
-  const aboveUcl = limits.ucl !== null && mean > limits.ucl;
-  const belowLcl = limits.lcl !== null && mean < limits.lcl;
+  const ucl = numberOrNull(row.ucl);
+  const lcl = numberOrNull(row.lcl);
+  const aboveUcl = ucl !== null && mean > ucl;
+  const belowLcl = lcl !== null && mean < lcl;
   return {
     batchId: Number(row.batch_id ?? 0),
     batch: String(row.batch_number ?? ''),
@@ -153,6 +159,8 @@ function toControlChartPoint(row: ResultRow, limits: ControlChartLimits): Contro
     stdDev: numberOrNull(row.std_dev),
     min: numberOrNull(row.min_value) ?? mean,
     max: numberOrNull(row.max_value) ?? mean,
+    ucl,
+    lcl,
     outOfControl: aboveUcl || belowLcl,
   };
 }
@@ -182,15 +190,13 @@ interface ControlChartAxis {
  * then widens it to round tick values so the axis labels read well.
  */
 export function controlChartAxis(
-  points: Pick<ControlChartPoint, 'mean'>[],
+  points: Pick<ControlChartPoint, 'mean' | 'ucl' | 'lcl'>[],
   limits: ControlChartLimits,
 ): ControlChartAxis {
   const values = [
-    limits.lcl,
-    limits.ucl,
     limits.lowerSpec,
     limits.upperSpec,
-    ...points.map((point) => point.mean),
+    ...points.flatMap((point) => [point.mean, point.ucl, point.lcl]),
   ].filter((value): value is number => value !== null);
   if (values.length === 0) return { domain: [0, 1], ticks: [0, 1] };
   const low = Math.min(...values);
@@ -205,26 +211,22 @@ export function controlChartAxis(
   return { domain: [start, end], ticks };
 }
 
-export function controlChartDomain(
-  points: Pick<ControlChartPoint, 'mean'>[],
-  limits: ControlChartLimits,
-): [number, number] {
-  return controlChartAxis(points, limits).domain;
-}
-
-/** Maps characteristic_control_chart rows (one per batch) to points; the limits repeat on every row. */
+/**
+ * Maps characteristic_control_chart rows (one per batch) to points. The grand mean and the
+ * specification limits repeat on every row; ucl and lcl are per subgroup because they
+ * depend on that subgroup's sample count.
+ */
 export function toControlChartSeries(rows: ResultRow[]): ControlChartSeries {
   const first = rows[0];
   const limits: ControlChartLimits = {
     grandMean: numberOrNull(first?.grand_mean),
-    ucl: numberOrNull(first?.ucl),
-    lcl: numberOrNull(first?.lcl),
     target: numberOrNull(first?.target_value),
     lowerSpec: numberOrNull(first?.lower_spec_limit),
     upperSpec: numberOrNull(first?.upper_spec_limit),
   };
-  const points = rows.map((row) => toControlChartPoint(row, limits));
-  return { points, limits, ...controlChartAxis(points, limits) };
+  const points = rows.map(toControlChartPoint);
+  const hasControlLimits = points.some((point) => point.ucl !== null && point.lcl !== null);
+  return { points, limits, hasControlLimits, ...controlChartAxis(points, limits) };
 }
 
 /** The leading hyphen-delimited segments every batch number shares, so ticks show only what differs. */
@@ -269,14 +271,14 @@ function trailingRun(
  * limits and the grand mean; it does not say why.
  */
 export function describeControlChart(series: ControlChartSeries): string {
-  const { points, limits } = series;
+  const { points, limits, hasControlLimits } = series;
   if (points.length === 0) return 'No subgroups fall inside the selected window.';
-  const { ucl, lcl, grandMean } = limits;
-  if (ucl === null || lcl === null || grandMean === null) {
+  const { grandMean } = limits;
+  if (!hasControlLimits || grandMean === null) {
     return 'Control limits are not available because every subgroup in the window has a single sample.';
   }
-  const above = points.filter((point) => point.mean > ucl).length;
-  const below = points.filter((point) => point.mean < lcl).length;
+  const above = points.filter((point) => point.ucl !== null && point.mean > point.ucl).length;
+  const below = points.filter((point) => point.lcl !== null && point.mean < point.lcl).length;
   const total = plural(points.length, 'subgroup');
   const clauses = [
     above + below === 0

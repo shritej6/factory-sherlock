@@ -54,10 +54,13 @@ function chartCalls(fetchMock: ReturnType<typeof mockFetch>): URLSearchParams[] 
     .map((url) => new URL(url, 'http://localhost').searchParams);
 }
 
-function setup(chartHandler: (url: string) => Response | Promise<Response> = chartResponse) {
+function setup(
+  chartHandler: (url: string) => Response | Promise<Response> = chartResponse,
+  machinesHandler: () => Response = () => jsonResponse(machines),
+) {
   const fetchMock = mockFetch([
     [/\/specifications$/, () => jsonResponse(specifications)],
-    [/\/machines$/, () => jsonResponse(machines)],
+    [/\/machines$/, machinesHandler],
     [CHART_ROUTE, chartHandler],
   ]);
   renderWithProviders(<ControlChartPanel window={WINDOW} />);
@@ -111,7 +114,7 @@ describe('ControlChartPanel', () => {
         /4 of 6 subgroups fall outside the control limits .* from batch SIM0001-CNC-03-02-B04 onward\./,
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText(/computed over the subgroups in the selected window/)).toBeVisible();
+    expect(screen.getByText(/Each subgroup has its own limits/)).toBeVisible();
     expect(screen.getByRole('button', { name: 'Show the SQL' })).toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText('Machine'), '3');
@@ -119,6 +122,33 @@ describe('ControlChartPanel', () => {
     const last = chartCalls(fetchMock).at(-1);
     expect(last?.get('machine_id')).toBe('3');
     expect(last?.get('specification_id')).toBe('5');
+  });
+
+  it('keeps the chart and says so inline when the machine list cannot be loaded', async () => {
+    setup(chartResponse, () =>
+      jsonResponse(
+        {
+          error: 'DatabaseError',
+          message: 'The database is unavailable',
+          details: {},
+          request_id: 'req-503',
+        },
+        503,
+      ),
+    );
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'The machine list could not be loaded, so the chart cannot be filtered by machine: The database is unavailable',
+    );
+    expect(within(alert).getByText('Request id req-503')).toBeInTheDocument();
+    expect(
+      await screen.findByText('No inspections of this characteristic in the window'),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText('Machine'))
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['All machines']);
   });
 
   it('shows the API message when the query is rejected instead of crashing', async () => {

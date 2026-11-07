@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { signIn } from './support/auth';
+import { signInThroughForm } from './support/auth';
 
 /** The nine sections of frontend/src/app/nav.ts, in sidebar order. */
 const SECTIONS = [
@@ -16,6 +16,10 @@ const SECTIONS = [
 ];
 
 test.describe('login', () => {
+  // This is the one spec that types the real demo password into the form; a trace would
+  // record the typed value and the request body, so none is kept here even on a retry.
+  test.use({ trace: 'off' });
+
   test('a wrong password shows the error and stays on the login page', async ({ page }) => {
     await page.goto('/login');
     await page.getByLabel('Username').fill('engineer');
@@ -30,7 +34,7 @@ test.describe('login', () => {
   test('the engineer lands on the overview and the sidebar lists the nine sections', async ({
     page,
   }) => {
-    await signIn(page, 'engineer');
+    await signInThroughForm(page, 'engineer');
 
     await expect(page).toHaveURL(/\/$/);
     const sidebar = page.getByRole('complementary', { name: 'Primary' });

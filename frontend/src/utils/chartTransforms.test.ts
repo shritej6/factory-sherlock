@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { CONTROL_CHART_ROWS, controlChartRows, subgroupRow } from '@tests/fixtures/controlChart';
+import {
+  CONTROL_CHART_ROWS,
+  controlChartRows,
+  controlLimitsFor,
+  subgroupRow,
+} from '@tests/fixtures/controlChart';
 
 import {
   controlChartAxis,
-  controlChartDomain,
   countInspectionResults,
   describeControlChart,
   pivotDailyTrend,
@@ -16,7 +20,7 @@ import {
   toPassFailSeries,
 } from './chartTransforms';
 
-const NO_LIMITS = { ucl: null, lcl: null, lowerSpec: null, upperSpec: null };
+const NO_SPEC_LIMITS = { lowerSpec: null, upperSpec: null };
 
 describe('pivotDailyTrend', () => {
   it('pivots one row per date and machine into one point per date, filling gaps with zero', () => {
@@ -116,6 +120,8 @@ describe('toControlChartSeries', () => {
       stdDev: 0.0406,
       min: 19.914,
       max: 20.065,
+      ucl: 20.0653,
+      lcl: 20.0231,
       outOfControl: true,
     });
     expect(series.points.map((p) => p.outOfControl)).toEqual([
@@ -126,42 +132,67 @@ describe('toControlChartSeries', () => {
       true,
       true,
     ]);
+    expect(series.hasControlLimits).toBe(true);
     expect(series.limits).toEqual({
       grandMean: 20.0442,
-      ucl: 20.0653,
-      lcl: 20.0231,
       target: 20,
       lowerSpec: 19.9,
       upperSpec: 20.1,
     });
   });
 
+  it('judges each subgroup against its own limits, which widen as the sample count falls', () => {
+    const small = controlLimitsFor(5);
+    expect(small).toEqual({ ucl: 20.0865, lcl: 20.0019 });
+    const series = toControlChartSeries([
+      subgroupRow(1, 'B01', 20.0758),
+      subgroupRow(2, 'B02', 20.0758, { sample_count: 5 }),
+      subgroupRow(3, 'B03', 20.0758, { sample_count: 1, std_dev: null, ucl: null, lcl: null }),
+    ]);
+    expect(series.points.map((p) => [p.ucl, p.lcl, p.outOfControl])).toEqual([
+      [20.0653, 20.0231, true],
+      [small.ucl, small.lcl, false],
+      [null, null, false],
+    ]);
+    expect(series.hasControlLimits).toBe(true);
+  });
+
   it('reads decimals that arrive as strings', () => {
     const series = toControlChartSeries([
       subgroupRow(1, 'B01', 20.2, { mean_value: '20.2000', ucl: '20.0653', std_dev: '0.0300' }),
     ]);
-    expect(series.points[0]).toMatchObject({ mean: 20.2, stdDev: 0.03, outOfControl: true });
-    expect(series.limits.ucl).toBe(20.0653);
+    expect(series.points[0]).toMatchObject({
+      mean: 20.2,
+      stdDev: 0.03,
+      ucl: 20.0653,
+      outOfControl: true,
+    });
   });
 
   it('pads the y domain around the limits and the plotted means, on round tick values', () => {
     const series = toControlChartSeries(CONTROL_CHART_ROWS);
     expect(series.domain).toEqual([19.85, 20.2]);
     expect(series.ticks).toEqual([19.85, 19.9, 19.95, 20, 20.05, 20.1, 20.15, 20.2]);
-    expect(controlChartDomain([], series.limits)).toEqual([19.85, 20.15]);
-    expect(controlChartDomain([{ mean: 5 }], { ...series.limits, lowerSpec: null })).toEqual([
-      0, 25,
-    ]);
-    expect(controlChartAxis([{ mean: 20 }], { ...series.limits, ...NO_LIMITS })).toEqual({
-      domain: [19.8, 20.2],
-      ticks: [19.8, 19.9, 20, 20.1, 20.2],
+    expect(controlChartAxis([], series.limits).domain).toEqual([19.85, 20.15]);
+    expect(
+      controlChartAxis([{ mean: 5, ucl: null, lcl: null }], { ...series.limits, lowerSpec: null })
+        .domain,
+    ).toEqual([0, 25]);
+    expect(
+      controlChartAxis([{ mean: 20, ucl: 20.1, lcl: 19.9 }], {
+        ...series.limits,
+        ...NO_SPEC_LIMITS,
+      }),
+    ).toEqual({
+      domain: [19.85, 20.15],
+      ticks: [19.85, 19.9, 19.95, 20, 20.05, 20.1, 20.15],
     });
   });
 
   it('handles null control limits and null std_dev without flagging any point', () => {
     const series = toControlChartSeries(controlChartRows({ ucl: null, lcl: null, std_dev: null }));
-    expect(series.limits.ucl).toBeNull();
-    expect(series.limits.lcl).toBeNull();
+    expect(series.hasControlLimits).toBe(false);
+    expect(series.points.every((p) => p.ucl === null && p.lcl === null)).toBe(true);
     expect(series.points.every((p) => p.stdDev === null)).toBe(true);
     expect(series.points.some((p) => p.outOfControl)).toBe(false);
     expect(series.domain[0]).toBeLessThan(19.9);
@@ -171,14 +202,8 @@ describe('toControlChartSeries', () => {
   it('returns an empty series with a default domain for no rows', () => {
     expect(toControlChartSeries([])).toEqual({
       points: [],
-      limits: {
-        grandMean: null,
-        ucl: null,
-        lcl: null,
-        target: null,
-        lowerSpec: null,
-        upperSpec: null,
-      },
+      limits: { grandMean: null, target: null, lowerSpec: null, upperSpec: null },
+      hasControlLimits: false,
       domain: [0, 1],
       ticks: [0, 1],
     });

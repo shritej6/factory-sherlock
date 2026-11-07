@@ -5,8 +5,8 @@ import { DailyTrendChart } from '@/components/charts/DailyTrendChart';
 import { DefectRateChart } from '@/components/charts/DefectRateChart';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { ErrorState, LoadingState } from '@/components/ui/States';
-import { useAnalyticsQuery, useOrderCounts, useQualitySummary } from '@/hooks/queries';
-import { DEFAULT_WINDOW_END, DEFAULT_WINDOW_START, ORDER_STATUSES } from '@/types/constants';
+import { useAnalyticsQuery, useOrderStatusCounts, useQualitySummary } from '@/hooks/queries';
+import { DEFAULT_WINDOW_END, DEFAULT_WINDOW_START } from '@/types/constants';
 import {
   pivotDailyTrend,
   toDefectCategorySeries,
@@ -35,7 +35,7 @@ export function AnalyticsPage() {
   const defectRates = useAnalyticsQuery('machine_defect_rate_comparison', params);
   const recurring = useAnalyticsQuery('recurring_defects', params);
   const summary = useQualitySummary();
-  const orderCounts = useOrderCounts(ORDER_STATUSES);
+  const orderCounts = useOrderStatusCounts();
   const queries = [trend, defectRates, recurring, summary, orderCounts];
   const firstError = queries.find((q) => q.isError);
 

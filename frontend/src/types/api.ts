@@ -142,6 +142,9 @@ export interface ProductionOrder {
 
 export type OrderListParams = PageParams & { status?: OrderStatus | '' };
 
+/** One integer per order status from GET /production-orders/status-counts; every status is present. */
+export type OrderStatusCounts = Record<OrderStatus, number>;
+
 export interface ProductionOrderCreate {
   order_number: string;
   product_id: number;
@@ -177,6 +180,8 @@ export interface ProductionBatch {
   batch_number: string;
   production_order_id: number;
   machine_id: number;
+  /** Order number of production_order_id, so lists need no second lookup. */
+  order_number: string;
   quantity: number;
   status: BatchStatus;
   started_at: string;
@@ -185,7 +190,12 @@ export interface ProductionBatch {
   material_links: BatchMaterial[];
 }
 
-export type BatchListParams = PageParams & { order_id?: number; machine_id?: number };
+/** `status` is repeatable: an array is sent as `status=A&status=B` and matches any of them. */
+export type BatchListParams = PageParams & {
+  order_id?: number;
+  machine_id?: number;
+  status?: BatchStatus | readonly BatchStatus[] | '';
+};
 
 export interface QuarantineRequest {
   reason: string;
@@ -246,6 +256,11 @@ export interface InvestigationStatusChange {
   status: InvestigationStatus;
   conclusion?: string | null;
 }
+
+/** `status` is repeatable: an array is sent as `status=A&status=B` and matches any of them. */
+export type InvestigationListParams = PageParams & {
+  status?: InvestigationStatus | readonly InvestigationStatus[] | '';
+};
 
 export type ResultRow = Record<string, string | number | boolean | null>;
 

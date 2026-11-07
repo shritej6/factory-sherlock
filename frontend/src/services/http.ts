@@ -58,7 +58,8 @@ export const tokenStore = {
   },
 };
 
-export type QueryValue = string | number | boolean | null | undefined;
+/** An array value is repeated, `status=A&status=B`, which the list endpoints read as any-of. */
+export type QueryValue = string | number | boolean | null | undefined | readonly string[];
 
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
@@ -73,6 +74,10 @@ export function buildQuery(query: Record<string, QueryValue> | undefined): strin
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (value === undefined || value === null || value === '') continue;
+    if (Array.isArray(value)) {
+      for (const item of value) params.append(key, item);
+      continue;
+    }
     params.set(key, String(value));
   }
   const text = params.toString();

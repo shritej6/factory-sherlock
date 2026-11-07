@@ -28,6 +28,10 @@ export const INVESTIGATION_STATUSES: readonly InvestigationStatus[] = [
   'IN_REVIEW',
   'CLOSED',
 ];
+/** Every investigation state that still needs attention; CLOSED is the only terminal state. */
+export const OPEN_INVESTIGATION_STATUSES: readonly InvestigationStatus[] = ['OPEN', 'IN_REVIEW'];
+/** Orders that can start a batch; the backend rejects batches on orders in any other state. */
+export const PRODUCIBLE_ORDER_STATUSES: readonly OrderStatus[] = ['RELEASED', 'IN_PROGRESS'];
 export const FAULT_KINDS: readonly FaultKind[] = [
   'TOOL_WEAR',
   'CALIBRATION_DRIFT',
