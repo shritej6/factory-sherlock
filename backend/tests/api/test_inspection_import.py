@@ -94,7 +94,7 @@ def test_valid_file_is_imported_with_the_same_rules_as_manual_entry(
     assert body["imported"] == 5 and body["failed_inspections"] == 3
     assert len(body["inspection_ids"]) == 5 and len(set(body["inspection_ids"])) == 5
 
-    listed = {i["id"]: i for i in client.get("/api/v1/inspections", headers=operator).json()}
+    listed = {i["id"]: i for i in client.get("/api/v1/inspections", headers=operator).json()["items"]}
     assert set(listed) == set(body["inspection_ids"])
     by_order = [listed[i] for i in body["inspection_ids"]]
     assert [i["result"] for i in by_order] == ["PASS", "FAIL", "FAIL", "PASS", "FAIL"]
@@ -201,7 +201,7 @@ def test_duplicate_against_the_database_is_rejected(
     client: TestClient, operator: Headers, engineer: Headers, ids: Ids, db_session: Session
 ) -> None:
     _shaft_batch(client, engineer, ids)
-    assert client.get("/api/v1/inspections", headers=operator).json() == []
+    assert client.get("/api/v1/inspections", headers=operator).json()["items"] == []
     first = _upload(client, operator, HEADER + f"{UNIT.format(1)},diameter,20.040,,\n")
     assert first.status_code == 201
     text = HEADER + f"{UNIT.format(2)},diameter,20.040,,\n{UNIT.format(1)},diameter,20.040,,\n"
@@ -274,7 +274,7 @@ def test_one_invalid_row_rolls_back_the_whole_file(
     errors = _errors(_upload(client, operator, text))
     assert [e["row"] for e in errors] == [4]
     assert _count(db_session) == 0
-    assert client.get("/api/v1/inspections", headers=operator).json() == []
+    assert client.get("/api/v1/inspections", headers=operator).json()["items"] == []
 
 
 def test_sample_file_imports_against_the_demo_scenario(
