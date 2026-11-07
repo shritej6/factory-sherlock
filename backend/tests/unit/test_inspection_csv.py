@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 from app.core.exceptions import ValidationError
-from app.services.inspection_csv import MAX_DATA_ROWS, RowError, parse_csv
+from app.services.inspection_csv import MAX_DATA_ROWS, MEASURED_FORMAT, RowError, parse_csv
 
 HEADER = "serial_number,characteristic,measured_value,inspected_at,defect_type_codes\n"
 
@@ -59,10 +59,17 @@ def test_unknown_and_duplicate_columns_are_header_errors() -> None:
 @pytest.mark.parametrize(
     ("value", "message"),
     [
-        ("twenty", "Must be a decimal number such as 20.040"),
+        ("twenty", MEASURED_FORMAT),
         ("", "Value is required"),
         ("20.0005", "Must have at most 3 decimal places"),
-        ("NaN", "Must be a decimal number such as 20.040"),
+        ("20.0400", "Must have at most 3 decimal places"),
+        ("NaN", MEASURED_FORMAT),
+        ("1_000", MEASURED_FORMAT),
+        ("2.004e1", MEASURED_FORMAT),
+        ("Infinity", MEASURED_FORMAT),
+        ("20.", MEASURED_FORMAT),
+        (".5", MEASURED_FORMAT),
+        ("\u0662\u0660.\u0660\u0664", MEASURED_FORMAT),
         ("12345678", "Must be smaller than 10000000 in absolute value"),
     ],
 )
@@ -72,9 +79,12 @@ def test_bad_measured_values_name_the_row_and_field(value: str, message: str) ->
     assert errors == [RowError(1, "measured_value", message)]
 
 
-def test_trailing_zeros_beyond_three_places_are_accepted_when_the_value_is_exact() -> None:
-    rows, errors = parse_csv(HEADER + "S1,diameter,20.0400,,\n")
-    assert errors == [] and rows[0].measured_value == Decimal("20.040")
+@pytest.mark.parametrize(
+    ("value", "stored"), [("20.04", "20.040"), ("+7", "7.000"), ("-0.5", "-0.500")]
+)
+def test_accepted_decimals_are_stored_with_three_places(value: str, stored: str) -> None:
+    rows, errors = parse_csv(HEADER + f"S1,diameter,{value},,\n")
+    assert errors == [] and rows[0].measured_value == Decimal(stored)
 
 
 @pytest.mark.parametrize("value", ["yesterday", "2026-11-02T08:15:00+00:00", "2026-13-01"])
@@ -100,7 +110,7 @@ def test_every_problem_in_a_row_is_reported_and_rows_keep_their_position() -> No
     assert [r.row for r in rows] == [4]
     assert errors == [
         RowError(2, "serial_number", "Value is required"),
-        RowError(2, "measured_value", "Must be a decimal number such as 20.040"),
+        RowError(2, "measured_value", MEASURED_FORMAT),
     ]
 
 
@@ -140,3 +150,47 @@ def test_header_only_and_empty_text_are_rejected() -> None:
         parse_csv(HEADER + "\n\n")
     with pytest.raises(ValidationError, match="no header row"):
         parse_csv("")
+
+
+def test_serial_numbers_are_upper_cased_so_case_variants_are_the_same_unit() -> None:
+    rows, errors = parse_csv(
+        HEADER + "po-1-b01-u0001,diameter,20.0,,\nPO-1-B01-U0001,Diameter,20.1,,\n"
+    )
+    assert [r.serial_number for r in rows] == ["PO-1-B01-U0001"]
+    assert errors == [
+        RowError(2, None, "Same serial number and characteristic as row 1 of this file")
+    ]
+
+
+def test_quoted_field_spanning_lines_does_not_shift_row_numbers() -> None:
+    text = HEADER + 'S1,"dia\nmeter",20.0,,\nS2,diameter,abc,,\n'
+    rows, errors = parse_csv(text)
+    assert [(r.row, r.characteristic) for r in rows] == [(1, "dia\nmeter")]
+    assert errors == [RowError(2, "measured_value", MEASURED_FORMAT)]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        HEADER + "S1,diameter," + "9" * 131_073 + ",,\n",
+        HEADER + 'S1,"diameter"x,20.0,,\n',
+        HEADER + 'S1,"diameter,20.0,,\n',
+    ],
+)
+def test_broken_csv_structure_is_a_file_error_not_a_crash(text: str) -> None:
+    with pytest.raises(ValidationError) as info:
+        parse_csv(text)
+    assert _errors(info.value) == [
+        {"row": None, "field": "file", "message": "The CSV structure is invalid"}
+    ]
+
+
+def test_unknown_header_names_are_echoed_truncated_and_blank_cells_are_labelled() -> None:
+    long_name = "x" * 80
+    with pytest.raises(ValidationError) as info:
+        parse_csv(f"serial_number,characteristic,measured_value,{long_name},,\nS1,d,1,a,b,c\n")
+    assert _errors(info.value) == [
+        {"row": None, "field": "x" * 50, "message": "Unknown column"},
+        {"row": None, "field": "(blank column 5)", "message": "Unknown column"},
+        {"row": None, "field": "(blank column 6)", "message": "Unknown column"},
+    ]

@@ -1,12 +1,18 @@
 """POST /api/v1/inspections/import: CSV upload, all or nothing."""
 
 import json
+from collections.abc import Callable
+from decimal import Decimal
 from pathlib import Path
 
-from app.models import Inspection
+import pytest
+from app.core.database import SessionLocal
+from app.models import Inspection, ProductionUnit, ProductSpecification
+from app.schemas.quality import InspectionCreate
+from app.services import inspection_import, quality_service
 from fastapi.testclient import TestClient
 from httpx import Response
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 Ids = dict[str, dict[str, int]]
@@ -308,3 +314,112 @@ def test_sample_file_imports_against_the_demo_scenario(
     body = response.json()
     assert body["imported"] == 16 and body["failed_inspections"] == 3
     assert len(body["inspection_ids"]) == 16
+
+
+def test_serial_numbers_match_without_regard_to_case(
+    client: TestClient, operator: Headers, engineer: Headers, ids: Ids
+) -> None:
+    _shaft_batch(client, engineer, ids)
+    response = _upload(client, operator, HEADER + f"{UNIT.format(1).lower()},diameter,20.040,,\n")
+    assert response.status_code == 201, response.text
+    assert response.json()["imported"] == 1
+    listed = client.get("/api/v1/inspections", headers=operator).json()["items"]
+    assert [i["id"] for i in listed] == response.json()["inspection_ids"]
+
+
+def test_oversized_upload_is_rejected_with_413_before_the_route(
+    client: TestClient, operator: Headers
+) -> None:
+    response = client.post(
+        URL,
+        content=b"x" * (inspection_import.MAX_FILE_BYTES + 64 * 1024 + 1),
+        headers={**operator, "Content-Type": "multipart/form-data; boundary=b"},
+    )
+    assert response.status_code == 413
+    assert response.json()["error"] == "payload_too_large"
+
+
+def _between_lookups_and_write(monkeypatch: pytest.MonkeyPatch, hook: Callable[[], None]) -> None:
+    """Run ``hook`` in the window another request can use: after validation, before the insert."""
+    original = inspection_import._load_lookups
+
+    def load_then_hook(session: Session, rows: list[object]) -> object:
+        lookups = original(session, rows)  # type: ignore[arg-type]
+        hook()
+        return lookups
+
+    monkeypatch.setattr(inspection_import, "_load_lookups", load_then_hook)
+
+
+def _unit_and_spec(db_session: Session, serial: str, characteristic: str) -> tuple[int, int]:
+    unit_id = db_session.scalar(
+        select(ProductionUnit.id).where(ProductionUnit.serial_number == serial)
+    )
+    spec_id = db_session.scalar(
+        select(ProductSpecification.id).where(ProductSpecification.characteristic == characteristic)
+    )
+    assert unit_id is not None and spec_id is not None
+    db_session.rollback()
+    return unit_id, spec_id
+
+
+def test_pair_recorded_by_another_request_during_the_import_is_a_row_error(
+    client: TestClient,
+    operator: Headers,
+    engineer: Headers,
+    ids: Ids,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _shaft_batch(client, engineer, ids)
+    unit_id, spec_id = _unit_and_spec(db_session, UNIT.format(2), "diameter")
+
+    def record_first() -> None:
+        with SessionLocal() as other:
+            quality_service.record_inspection(
+                other,
+                InspectionCreate(
+                    unit_id=unit_id, specification_id=spec_id, measured_value=Decimal("20.000")
+                ),
+            )
+            other.commit()
+
+    _between_lookups_and_write(monkeypatch, record_first)
+    rows = [f"{UNIT.format(n)},diameter,20.040,," for n in (1, 2, 3)]
+    errors = _errors(_upload(client, operator, HEADER + "\n".join(rows) + "\n"))
+    assert errors == [
+        {
+            "row": 2,
+            "field": None,
+            "message": "Another import recorded this unit and characteristic first",
+        }
+    ]
+    assert _count(db_session) == 1
+
+
+def test_other_integrity_errors_are_not_mistaken_for_the_race(
+    client: TestClient,
+    operator: Headers,
+    engineer: Headers,
+    ids: Ids,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A specification deleted mid-import violates a foreign key (1452), handled by errors.py."""
+    _shaft_batch(client, engineer, ids)
+    _, spec_id = _unit_and_spec(db_session, UNIT.format(1), "length")
+
+    def delete_specification() -> None:
+        with SessionLocal() as other:
+            other.execute(
+                text("DELETE FROM product_specifications WHERE id = :id"), {"id": spec_id}
+            )
+            other.commit()
+
+    _between_lookups_and_write(monkeypatch, delete_specification)
+    response = _upload(client, operator, HEADER + f"{UNIT.format(1)},length,150.000,,\n")
+    assert response.status_code == 422, response.text
+    body = response.json()
+    assert body["message"] == "The request references a row that does not exist"
+    assert body["details"] == {}
+    assert _count(db_session) == 0
