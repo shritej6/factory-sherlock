@@ -129,12 +129,9 @@ export const analyticsApi = {
   alerts: (page: PageParams = {}) => request<Page<Alert>>('/analytics/alerts', { query: page }),
   acknowledgeAlert: (id: number) =>
     request<Alert>(`/analytics/alerts/${id}/acknowledge`, { method: 'POST' }),
-  /** The empty body lets the server judge due dates against its own clock. */
+  /** The endpoint takes no body; the server clock is the check date. */
   checkOverdueOrders: () =>
-    request<OverdueCheckResponse>('/analytics/alerts/checks/overdue-orders', {
-      method: 'POST',
-      body: {},
-    }),
+    request<OverdueCheckResponse>('/analytics/alerts/checks/overdue-orders', { method: 'POST' }),
 };
 
 export const simulationApi = {

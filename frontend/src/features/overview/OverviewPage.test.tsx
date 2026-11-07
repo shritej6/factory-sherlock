@@ -148,7 +148,7 @@ describe('OverviewPage', () => {
       expect(checkButton()).toBeEnabled();
     });
 
-    it('posts an empty body, reports the raised alerts, and reloads the list', async () => {
+    it('posts without a body, reports the raised alerts, and reloads the list', async () => {
       const fetchMock = setup('OPERATOR', () => jsonResponse(checkResponse(2)));
       const user = userEvent.setup();
       await screen.findByText('Defect rate on CNC-01 exceeded 15%');
@@ -162,7 +162,8 @@ describe('OverviewPage', () => {
         await screen.findByText('Checked 9 open orders, raised 2 overdue alerts'),
       ).toBeInTheDocument();
       const checkCall = fetchMock.mock.calls.find(([input]) => CHECK_URL.test(String(input)));
-      expect(checkCall?.[1]).toMatchObject({ method: 'POST', body: '{}' });
+      expect(checkCall?.[1]).toMatchObject({ method: 'POST' });
+      expect(checkCall?.[1]).toHaveProperty('body', undefined);
       await waitFor(() => {
         const listCallsAfter = fetchMock.mock.calls.filter(([input]) =>
           /\/analytics\/alerts\?/.test(String(input)),
