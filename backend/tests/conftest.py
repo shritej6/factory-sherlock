@@ -18,6 +18,7 @@ from alembic import command
 from alembic.config import Config
 from app.core.config import get_settings
 from app.core.database import Base, SessionLocal, engine
+from app.core.throttle import get_login_throttle
 from app.main import app
 from app.seed import apply_reference_sql, ensure_demo_users
 from fastapi.testclient import TestClient
@@ -34,6 +35,14 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         path = str(item.fspath)
         if "/tests/api/" in path or "/tests/integration/" in path:
             item.add_marker(pytest.mark.integration)
+
+
+@pytest.fixture(autouse=True)
+def clean_login_throttle() -> Iterator[None]:
+    """The login throttle is process-wide state; no test inherits another test's failures."""
+    get_login_throttle().reset()
+    yield
+    get_login_throttle().reset()
 
 
 @pytest.fixture(scope="session")

@@ -43,3 +43,20 @@ class AuthenticationError(AppError):
 
 class AuthorizationError(AppError):
     status_code = 403
+
+
+class RateLimitedError(AppError):
+    """Too many failed login attempts for one account or client address.
+
+    ``retry_after_seconds`` is kept in ``details`` so the JSON body stays
+    self-contained and is also sent as the ``Retry-After`` header.
+    """
+
+    status_code = 429
+
+    def __init__(self, *, retry_after_seconds: int) -> None:
+        super().__init__(
+            "Too many failed login attempts. Try again later.",
+            details={"retry_after_seconds": retry_after_seconds},
+        )
+        self.retry_after_seconds = retry_after_seconds

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import AuthenticationError
 from app.core.security import create_access_token, hash_password, verify_password
+from app.core.throttle import get_login_throttle
 from app.models import User
 
 logger = logging.getLogger(__name__)
@@ -15,15 +16,24 @@ logger = logging.getLogger(__name__)
 _UNKNOWN_USER_HASH = hash_password("unknown-user-placeholder")
 
 
-def authenticate(session: Session, *, username: str, password: str) -> tuple[User, str]:
+def authenticate(
+    session: Session, *, username: str, password: str, client_ip: str
+) -> tuple[User, str]:
+    # The throttle runs before the user lookup and the bcrypt check, so a
+    # throttled attacker costs the server no hashing work and learns nothing
+    # about whether the username exists.
+    throttle = get_login_throttle()
+    throttle.check(username=username, client_ip=client_ip)
     user = session.scalar(select(User).where(User.username == username))
     # Same error for unknown user and wrong password so the API does not reveal
     # which usernames exist.
     stored_hash = user.password_hash if user is not None else _UNKNOWN_USER_HASH
     password_ok = verify_password(password, stored_hash)
     if user is None or not user.is_active or not password_ok:
+        throttle.record_failure(username=username, client_ip=client_ip)
         logger.info("login rejected", extra={"operation": "login"})
         raise AuthenticationError("Invalid username or password")
+    throttle.record_success(username=username)
     token = create_access_token(user_id=user.id, role=str(user.role))
     logger.info("login accepted", extra={"operation": "login", "user_id": user.id})
     return user, token
