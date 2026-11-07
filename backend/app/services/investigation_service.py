@@ -1,5 +1,6 @@
 """Creates investigations by running the engine and persisting its evidence."""
 
+from collections.abc import Sequence
 from typing import Any
 
 from sqlalchemy import select
@@ -27,12 +28,19 @@ _LOAD = (
 )
 
 
-def list_investigations(session: Session, paging: PageParams) -> PageResult[Investigation]:
+def list_investigations(
+    session: Session,
+    paging: PageParams,
+    *,
+    statuses: Sequence[InvestigationStatus] | None = None,
+) -> PageResult[Investigation]:
     stmt = (
         select(Investigation)
         .options(*_LOAD)
         .order_by(Investigation.created_at.desc(), Investigation.id.desc())
     )
+    if statuses:
+        stmt = stmt.where(Investigation.status.in_(statuses))
     return paginate(session, stmt, paging)
 
 

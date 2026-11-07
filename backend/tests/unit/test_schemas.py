@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any
 
 import pytest
+from app.models.enums import OrderStatus
 from app.schemas.catalog import (
     MachineCreate,
     MachineStatusChange,
@@ -19,6 +20,7 @@ from app.schemas.catalog import (
 from app.schemas.investigation import InvestigationCreate, InvestigationStatusChange
 from app.schemas.production import (
     BatchMaterialInput,
+    OrderStatusCounts,
     ProductionBatchCreate,
     ProductionOrderCreate,
     QuarantineRequest,
@@ -165,3 +167,8 @@ def test_fault_scenarios_need_a_known_kind_and_a_non_negative_index() -> None:
     last = {"machine_code": "CNC-01", "fault": "TOOL_WEAR", "start_batch_index": 3}
     accepts(SimulationRequest, start_time=START, batches_per_machine=4, faults=[last])
     rejects(SimulationRequest, start_time=START, batches_per_machine=3, faults=[last])
+
+
+def test_order_status_counts_has_exactly_one_field_per_order_status() -> None:
+    assert set(OrderStatusCounts.model_fields) == {status.value for status in OrderStatus}
+    assert all(field.is_required() for field in OrderStatusCounts.model_fields.values())

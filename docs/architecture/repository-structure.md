@@ -660,9 +660,9 @@ factory-sherlock/
 
 #### routes/production.py
 
-- Orders: `GET /production-orders?status=&limit=&offset=` (`Page[ProductionOrderRead]`), `POST /production-orders` (Engineer), `GET /production-orders/{id}`, `PATCH /production-orders/{id}` (Engineer), `POST /production-orders/{id}/status` (Operator). Batches: `GET /production-batches?order_id=&machine_id=&limit=&offset=` (`Page[ProductionBatchRead]`), `POST /production-batches` (Operator), `GET /production-batches/{id}`, `POST /production-batches/{id}/complete` (Operator), `POST /production-batches/{id}/quarantine` (Engineer, via `traceability_service`).
-- Dependencies: `app.schemas.production`, `app.schemas.common.Page`, `app.services.production_service`, `app.services.traceability_service`, `app.models.enums.OrderStatus`.
-- Testing: `tests/api/test_orders_api.py` (6 tests), `tests/api/test_batches_api.py` (9 tests including `test_batch_creation_writes_batch_units_and_materials_together`, `test_completing_batches_completes_the_order`, `test_quarantine_batch_records_reason_and_alert`), `tests/api/test_pagination_api.py` (`test_pages_are_stable_disjoint_and_cover_every_order`, `test_status_filter_applies_before_paging`, `test_batch_and_inspection_filters_combine_with_paging`).
+- Orders: `GET /production-orders?status=&limit=&offset=` (`Page[ProductionOrderRead]`), `POST /production-orders` (Engineer), `GET /production-orders/status-counts` (one `GROUP BY`; returns `{"PLANNED": n, "RELEASED": n, "IN_PROGRESS": n, "COMPLETED": n, "CANCELLED": n}` with every status present), `GET /production-orders/{id}`, `PATCH /production-orders/{id}` (Engineer), `POST /production-orders/{id}/status` (Operator). Batches: `GET /production-batches?order_id=&machine_id=&status=&limit=&offset=` (`Page[ProductionBatchRead]`; `status` repeatable, any of the given `BatchStatus` values; each batch carries `order_number`), `POST /production-batches` (Operator), `GET /production-batches/{id}`, `POST /production-batches/{id}/complete` (Operator), `POST /production-batches/{id}/quarantine` (Engineer, via `traceability_service`).
+- Dependencies: `app.schemas.production`, `app.schemas.common.Page`, `app.services.production_service`, `app.services.traceability_service`, `app.models.enums.OrderStatus`, `app.models.enums.BatchStatus`.
+- Testing: `tests/api/test_orders_api.py` (6 tests), `tests/api/test_batches_api.py` (9 tests including `test_batch_creation_writes_batch_units_and_materials_together`, `test_completing_batches_completes_the_order`, `test_quarantine_batch_records_reason_and_alert`), `tests/api/test_pagination_api.py` (`test_pages_are_stable_disjoint_and_cover_every_order`, `test_status_filter_applies_before_paging`, `test_batch_and_inspection_filters_combine_with_paging`), `tests/api/test_status_filters_api.py` (18 tests covering the repeatable `status` filters, `order_number`, the constant statement count, and `status-counts`).
 - Status: Implemented.
 
 #### routes/quality.py
@@ -674,7 +674,7 @@ factory-sherlock/
 
 #### routes/investigations.py
 
-- `GET /investigations?limit=&offset=` (`Page[InvestigationRead]`), `POST /investigations` (Engineer, passes `user.id` as `opened_by`), `GET /investigations/{id}`, `POST /investigations/{id}/status` (Engineer).
+- `GET /investigations?status=&limit=&offset=` (`Page[InvestigationRead]`; `status` repeatable, any of the given `InvestigationStatus` values; `total` reflects the filter), `POST /investigations` (Engineer, passes `user.id` as `opened_by`), `GET /investigations/{id}`, `POST /investigations/{id}/status` (Engineer).
 - Dependencies: `app.schemas.investigation`, `app.schemas.common.Page`, `app.services.investigation_service`.
 - Testing: `tests/api/test_investigations_api.py` (`test_high_defect_rate_is_detected_with_evidence` asserts the codes `R1` to `R7` in order, `test_healthy_machine_is_not_flagged`, `test_investigation_lifecycle_and_validation`, `test_evidence_rows_keep_sql_column_order`).
 - Status: Implemented.

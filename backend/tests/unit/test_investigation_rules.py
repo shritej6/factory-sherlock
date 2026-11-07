@@ -6,7 +6,12 @@ from typing import Any
 
 import pytest
 from app.investigation.engine import investigate
-from app.investigation.rules import InvestigationContext, RuleThresholds, rule_cusum_onset
+from app.investigation.rules import (
+    InvestigationContext,
+    RuleThresholds,
+    hours_apart,
+    rule_cusum_onset,
+)
 
 WINDOW = (datetime(2026, 11, 2), datetime(2026, 11, 4))
 CAUSAL_WORDS = ("caused", "because", "due to", "proves", "resulted in")
@@ -237,6 +242,21 @@ def test_cusum_arithmetic_matches_a_hand_computed_example() -> None:
         "signal",
     ]
     assert "reference 2.0% from the first 3 hours" in card.narrative
+
+
+@pytest.mark.parametrize(
+    ("later", "earlier", "expected"),
+    [
+        (datetime(2026, 11, 2, 9, 30), datetime(2026, 11, 2, 9, 0), None),
+        (datetime(2026, 11, 2, 10, 0), datetime(2026, 11, 2, 9, 0), "1 hour after"),
+        (datetime(2026, 11, 2, 12, 0), datetime(2026, 11, 2, 9, 0), "3 hours after"),
+        (datetime(2026, 11, 2, 7, 0), datetime(2026, 11, 2, 9, 0), "2 hours before"),
+    ],
+)
+def test_hours_apart_counts_whole_hours_in_either_direction(
+    later: datetime, earlier: datetime, expected: str | None
+) -> None:
+    assert hours_apart(later, earlier, after="after", before="before") == expected
 
 
 def test_cusum_narrative_compares_with_the_r3_onset() -> None:

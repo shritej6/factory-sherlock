@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasPath, BaseModel, ConfigDict, Field
 
 from app.models.enums import BatchStatus, OrderStatus
 from app.schemas.common import ApiModel
@@ -46,6 +46,16 @@ class ProductionOrderRead(ApiModel):
     updated_at: datetime
 
 
+class OrderStatusCounts(BaseModel):
+    """Number of production orders in each status; one key per ``OrderStatus`` value."""
+
+    PLANNED: int
+    RELEASED: int
+    IN_PROGRESS: int
+    COMPLETED: int
+    CANCELLED: int
+
+
 class BatchMaterialInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -70,6 +80,7 @@ class ProductionBatchRead(ApiModel):
     id: int
     batch_number: str
     production_order_id: int
+    order_number: str = Field(validation_alias=AliasPath("order", "order_number"))
     machine_id: int
     quantity: int
     status: BatchStatus
