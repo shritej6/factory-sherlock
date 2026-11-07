@@ -180,6 +180,19 @@ export interface Inspection {
   defect_codes: string[];
 }
 
+export interface InspectionImportResult {
+  imported: number;
+  failed_inspections: number;
+  inspection_ids: number[];
+}
+
+/** One entry of `details.errors` on a 422 from the CSV import; `row` is the 1-based data row. */
+export interface InspectionImportRowError {
+  row: number;
+  field: string | null;
+  message: string;
+}
+
 export interface QualitySummary {
   total_produced: number;
   total_inspected: number;

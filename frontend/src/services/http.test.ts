@@ -84,6 +84,21 @@ describe('request error mapping', () => {
     expect(error.error).toBe('BadResponse');
   });
 
+  it('sends a FormData body as multipart without a JSON content type', async () => {
+    tokenStore.set('token-1');
+    const fetchMock = mockFetch([
+      [/\/inspections\/import$/, () => jsonResponse({ imported: 1 }, 201)],
+    ]);
+    const body = new FormData();
+    body.append('file', new File(['a,b'], 'rows.csv', { type: 'text/csv' }));
+    await request('/inspections/import', { method: 'POST', body });
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.body).toBe(body);
+    const headers = init.headers as Record<string, string>;
+    expect(headers['Content-Type']).toBeUndefined();
+    expect(headers.Authorization).toBe('Bearer token-1');
+  });
+
   it('omits empty query parameters', () => {
     expect(buildQuery({ status: '', machine_id: 3, limit: undefined, hours: null })).toBe(
       '?machine_id=3',
