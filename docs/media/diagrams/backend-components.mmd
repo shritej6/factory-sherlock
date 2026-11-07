@@ -2,12 +2,16 @@
 %% Embedded in docs/architecture/component-design.md; keep both copies in sync.
 flowchart LR
     subgraph main["app/main.py"]
-        App["create_app()<br/>CORS, error handlers, api_router"]
+        App["create_app()<br/>CORS, request id, error handlers, api_router"]
+    end
+
+    subgraph jobs["app/jobs"]
+        J1["check_overdue_orders<br/>(CLI, own session)"]
     end
 
     subgraph api["app/api"]
         Router["router.py<br/>/api/v1"]
-        Deps["deps.py<br/>DbSession, CurrentUser,<br/>Operator, Engineer"]
+        Deps["deps.py<br/>DbSession, CurrentUser,<br/>Operator, Engineer, Paging"]
         ErrH["errors.py<br/>register_error_handlers"]
         R1["routes/health"]
         R2["routes/auth"]
@@ -21,7 +25,7 @@ flowchart LR
     end
 
     subgraph schemas["app/schemas"]
-        Sch["auth, catalog, production,<br/>quality, investigation,<br/>analytics, simulation, common"]
+        Sch["auth, catalog, production,<br/>quality, investigation, traceability,<br/>analytics, simulation, common (Page)"]
     end
 
     subgraph services["app/services"]
@@ -33,6 +37,9 @@ flowchart LR
         S6["investigation_service"]
         S7["analytics_service"]
         S8["simulation_service"]
+        S9["alert_service"]
+        S10["inspection_import"]
+        S11["inspection_csv"]
     end
 
     subgraph domain["app/domain"]
@@ -47,13 +54,14 @@ flowchart LR
 
     subgraph investigation["app/investigation"]
         IE["engine.investigate"]
-        IR["rules R1 to R6<br/>InvestigationContext, Evidence"]
+        IR["rules R1 to R7<br/>InvestigationContext, Evidence"]
         IS["summary.build_summary"]
     end
 
     subgraph repos["app/repositories"]
         QL["sql_loader<br/>load_sql, load_query, query_names"]
         QR["query_runner<br/>SqlQueryRunner, QueryRunner protocol"]
+        PG["pagination<br/>PageParams, PageResult, paginate"]
     end
 
     subgraph models["app/models"]
@@ -64,6 +72,7 @@ flowchart LR
         C1["config.get_settings"]
         C2["database.engine, SessionLocal,<br/>get_db_session, Base"]
         C3["security.hash_password,<br/>create/decode_access_token"]
+        C7["throttle.LoginThrottle"]
         C4["logging.configure_logging"]
         C6["clock.now"]
         C5["exceptions.AppError family"]
@@ -78,22 +87,27 @@ flowchart LR
     R2 --> S1
     R3 --> S2
     R4 --> S3 & S5
-    R5 --> S4
+    R5 --> S4 & S10
     R6 --> S6
     R7 --> S5 & S2
-    R8 --> S7
+    R8 --> S7 & S9
     R9 --> S8
+    J1 --> S9
+    J1 --> C2
     api --> Deps
-    Deps --> C2 & C3 & S1
+    Deps --> C2 & C3 & S1 & PG
     api --> Sch
+    S1 --> C7
+    S10 --> S11 & S4
     S2 & S3 & S5 & S6 --> D2
-    S4 --> D1
+    S4 & S10 --> D1
     S6 --> IE
     IE --> IR --> IS
     S8 --> SimE
     SimE --> SimC
     SimE --> D1 & D2
     S5 & S7 & S6 --> QR
+    S2 & S3 & S4 & S6 & S7 --> PG
     IR --> QR
     QR --> QL
     QL --> SQLF

@@ -1,6 +1,6 @@
 # Data flow
 
-This document traces three representative write paths through the backend as sequence diagrams: production batch creation, simulation run persistence, and investigation evidence generation. Each one is a single database transaction bounded by `get_db_session` in `backend/app/core/database.py`: the session commits when the route handler returns and rolls back when any exception escapes. Participants are named after the modules in `backend/app`.
+This document traces five write paths through the backend as sequence diagrams: production batch creation, the CSV inspection import, simulation run persistence, investigation evidence generation, and the overdue order check. Each one is a single database transaction bounded by `get_db_session` in `backend/app/core/database.py`: the session commits when the route handler returns and rolls back when any exception escapes. The overdue check also runs as a command (`app/jobs/check_overdue_orders.py`) that opens and commits its own session. Participants are named after the modules in `backend/app`.
 
 Read paths (lists, traces, dashboard queries) follow the same shape without writes and are not drawn separately. For the general request pipeline see [component-design.md](component-design.md#request-flow).
 
@@ -68,6 +68,72 @@ Points worth noting:
 - The serial number format is `<batch_number>-Unnnn` and `produced_at` is set to the batch start time for every unit; units are created up front so inspections can reference them.
 - The batch number is derived from a count of existing batches for the order; the `UNIQUE` constraint on `batch_number` is the real guard against concurrent duplicates and is surfaced as 409.
 - Completing a batch later (`POST /production-batches/{id}/complete`) is a separate transaction that moves the batch to `COMPLETED`, adds its quantity to `order.quantity_completed`, and marks the order `COMPLETED` when the planned quantity is reached.
+
+## Inspection import
+
+Endpoint: `POST /api/v1/inspections/import` (role `Operator`, `multipart/form-data` with one `file` part). Implementation: `inspection_import.import_csv` in `backend/app/services/inspection_import.py`, the parser in `inspection_csv.py`, and `quality_service.record_inspection` for every row.
+
+The upload is judged in three passes before anything is written: the parser checks the header and every field and collects row errors; the service resolves serial numbers, characteristics, defect codes, and existing inspections with one query per lookup table and collects more row errors; only when the list is empty does it call `record_inspection` once per row, the same function the manual `POST /inspections` uses. A file with any invalid row produces one 422 whose `details.errors` lists every `{row, field, message}`, and no inspection exists afterwards. Limits: 1 MiB, 5000 data rows, 10 defect codes per row.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant R as routes/quality.import_inspections
+    participant D as api/deps
+    participant I as services/inspection_import
+    participant P as services/inspection_csv
+    participant Q as services/quality_service
+    participant S as SQLAlchemy Session
+    participant M as MySQL
+
+    C->>R: POST /inspections/import (multipart, file=<csv>)
+    R->>D: DbSession, Operator
+    R->>R: content = file.read(MAX_FILE_BYTES + 1)
+    R->>I: import_csv(session, content, content_type, filename)
+    I->>I: decode_upload: content type, non-empty, size, utf-8-sig
+    alt not a CSV upload, empty, too large, or not UTF-8
+        I-->>R: ValidationError 422 (details.errors = [{row: null, field: "file", message}])
+    end
+    I->>P: parse_csv(text)
+    P->>P: header: known, unique, required columns present
+    alt header invalid, no data rows, or more than 5000 rows
+        P-->>R: ValidationError 422 (file-level or header errors)
+    end
+    loop each non-blank record
+        P->>P: parse serial_number, characteristic, measured_value, inspected_at, defect_type_codes
+        P->>P: duplicate (serial, characteristic) within the file?
+    end
+    P-->>I: (rows, row errors)
+    I->>S: _load_lookups: units by serial with product id; all specifications; defect codes; (unit_id, specification_id) pairs already inspected
+    S->>M: SELECT production_units JOIN production_batches JOIN production_orders; SELECT product_specifications; SELECT defect_types; SELECT inspections
+    loop each parsed row
+        I->>I: unit exists? specification for (product, characteristic)? pair not inspected? codes known? no codes on a passing value?
+    end
+    alt any row error
+        I-->>R: ValidationError 422 (details.errors sorted by row, field)
+        R-->>D: exception propagates
+        D->>M: ROLLBACK
+    end
+    loop each InspectionCreate
+        I->>Q: record_inspection(session, create)
+        Q->>S: get unit, get specification; evaluate_measurement; add Inspection + InspectionDefect[]
+        Q->>S: flush() via _flush_or_conflict
+        S->>M: INSERT inspections, inspection_defects
+    end
+    I-->>R: InspectionImportResult (imported, failed_inspections, inspection_ids)
+    R-->>D: handler returns
+    D->>M: COMMIT
+    R-->>C: 201 InspectionImportResult
+```
+
+Points worth noting:
+
+- `inspection_csv` never opens a session and never logs, so it is unit tested without MySQL (`tests/unit/test_inspection_csv.py`); the service and route are covered by `tests/api/test_inspection_import.py`, including the rollback of a file with one bad row and the import of `database/seeds/sample_inspection_import.csv` against the demo scenario.
+- Row numbers in the errors are 1-based positions below the header, so they match the line numbers a spreadsheet shows minus one; blank lines count.
+- Characteristics are matched without regard to case against the unit's product; `inspected_at` is optional and defaults to the request time for every row; a `|`-separated defect code list is validated against `defect_types` and rejected on a passing measurement, exactly as for manual entry.
+- `_rule_errors` repeats the checks `record_inspection` would raise so that the whole file is reported at once; the flush inside `record_inspection` and the `UNIQUE (unit_id, specification_id)` constraint remain the final guard.
+- The frontend `ImportInspectionsPanel.tsx` posts the file through `qualityApi.importInspections` (a `FormData` body, so `http.ts` sets no `Content-Type` header), shows the row errors in a table, and refreshes the production query keys on success.
 
 ## Simulation run persistence
 
@@ -144,7 +210,7 @@ Points worth noting:
 
 Endpoint: `POST /api/v1/investigations` (role `Engineer`). Implementation: `investigation_service.open_investigation` in `backend/app/services/investigation_service.py`, `investigation/engine.investigate`, and the rules in `investigation/rules.py`.
 
-Each rule runs one named SQL file through `SqlQueryRunner`, records what it learned on the shared `InvestigationContext`, and returns an `Evidence` card that carries the query name, the full SQL text, and the result rows. The service persists the investigation, one `investigation_evidence` row per card (ordered by `sequence`), and one `investigation_batches` junction row per batch that R5 flagged.
+Each rule runs one named SQL file through `SqlQueryRunner`, records what it learned on the shared `InvestigationContext`, and returns an `Evidence` card that carries the query name, the full SQL text, and the result rows (for R7 the rows plus two derived columns, `cusum` and `signal`). The service persists the investigation, one `investigation_evidence` row per card (ordered by `sequence`), and one `investigation_batches` junction row per batch that R5 flagged.
 
 ```mermaid
 sequenceDiagram
@@ -155,7 +221,7 @@ sequenceDiagram
     participant I as services/investigation_service
     participant K as services/catalog_service
     participant G as investigation/engine.investigate
-    participant U as investigation/rules (R1..R6)
+    participant U as investigation/rules (R1..R7)
     participant Y as investigation/summary
     participant Q as repositories/SqlQueryRunner
     participant L as repositories/sql_loader
@@ -194,6 +260,10 @@ sequenceDiagram
     U-->>G: Evidence R5
     G->>U: R6 rule_shared_material_lots (needs batches) -> run("investigation.shared_material_lots", batch_ids expanding)
     U-->>G: Evidence R6 or None
+    G->>U: R7 rule_cusum_onset (machine only, at least 3 hourly rows) -> run("investigation.hourly_defect_rates")
+    U->>U: p0 from the first 3 hours; S_t = max(0, S_t-1 + rate - p0 - 0.025); signal at S_t >= 0.10
+    U->>U: ctx.cusum_onset_time = first signalling hour
+    U-->>G: Evidence R7 (rows + cusum, signal) or None
     G->>Y: build_summary(ctx)
     Y-->>G: summary text
     G-->>I: InvestigationReport (evidence[], summary, affected_batch_ids, elevated)
@@ -210,10 +280,54 @@ sequenceDiagram
 Points worth noting:
 
 - The rules execute inside the same transaction as the insert, so evidence reflects a consistent snapshot at `REPEATABLE READ` (MySQL InnoDB default).
-- When `machine_id` is omitted, R1 reports the worst machine in the window, R3 and R4 are skipped, and R5 scans all machines.
+- When `machine_id` is omitted, R1 reports the worst machine in the window, R3, R4, and R7 are skipped, and R5 scans all machines.
+- R7 is the only rule whose stored rows differ from the raw query result: `_cusum_rows` adds `cusum` (rounded to four places at every step) and `signal` to each hourly row so a reader can check the statistic by hand. Its narrative compares the signalling hour with the R3 onset, and `build_summary` adds one sentence on whether the two estimates fall in the same hour.
 - `product_id` is validated and stored on the investigation but is not passed into `InvestigationContext`; none of the rules filter by product at present.
 - Evidence rows store `query_sql` verbatim from the file, including its comment header, which is what the case board shows to users.
 - Later status changes (`POST /investigations/{id}/status`) go through `INVESTIGATION_TRANSITIONS`; closing requires a non-empty conclusion and sets `closed_at`.
+
+## Overdue order check
+
+Endpoint: `POST /api/v1/analytics/alerts/checks/overdue-orders` (role `Operator`, optional body `{"as_of": ...}`). Command: `uv run python -m app.jobs.check_overdue_orders [--as-of ...]` (`make check-overdue`). Implementation: `alert_service.raise_overdue_order_alerts` in `backend/app/services/alert_service.py`.
+
+The check is idempotent per open alert. It selects every order that is not `COMPLETED` or `CANCELLED` and whose `due_date` is before the check date, drops the ones that already have an unacknowledged `ORDER_OVERDUE` alert (found through `alerts.production_order_id`), and adds one alert per remaining order. An order gets a second alert only after the first one has been acknowledged and the order is still open. Severity is `WARNING` for one or two days late and `CRITICAL` from the third day; the alert is stamped with `as_of` so a replayed check sorts into the alert feed at that moment.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client or app/jobs/check_overdue_orders
+    participant R as routes/analytics.check_overdue_orders
+    participant D as api/deps
+    participant A as services/alert_service
+    participant S as SQLAlchemy Session
+    participant M as MySQL
+
+    C->>R: POST /analytics/alerts/checks/overdue-orders {as_of?}
+    R->>D: DbSession, Operator
+    R->>A: raise_overdue_order_alerts(session, as_of)
+    A->>A: moment = _naive(as_of or clock.now())
+    A->>S: overdue_orders: due_date < moment.date() AND status IN (PLANNED, RELEASED, IN_PROGRESS)
+    S->>M: SELECT production_orders ORDER BY due_date, id
+    A->>S: _orders_with_open_alert: ORDER_OVERDUE, acknowledged_at IS NULL, production_order_id IN (...)
+    S->>M: SELECT alerts.production_order_id
+    loop each overdue order without an open alert
+        A->>A: days = days_late(due_date, moment); severity = WARNING if days <= 2 else CRITICAL
+        A->>S: add Alert(machine_id, production_order_id, ORDER_OVERDUE, severity, message, created_at = moment)
+    end
+    A->>S: flush()
+    S->>M: INSERT alerts
+    A-->>R: OverdueCheckResult (checked, raised, alerts)
+    R-->>D: handler returns
+    D->>M: COMMIT
+    R-->>C: 200 OverdueCheckResponse {checked, raised, alerts[]}
+```
+
+Points worth noting:
+
+- `checked` counts the overdue open orders; `raised` counts the new alerts among them, so a second call right after the first returns the same `checked` and `raised: 0`.
+- The command path differs only in who owns the transaction: `check_overdue_orders.main` opens `SessionLocal()`, calls the same function, commits, and logs `{"checked", "raised", "alert_ids"}` as one JSON line; on any exception it rolls back and re-raises.
+- `due_date` is a `DATE`, so an order due today is on time until midnight; `as_of` with a UTC offset is converted to naive local time and loses its microseconds, matching the `DATETIME` columns.
+- Tests: `tests/unit/test_alert_rules.py` (days late, severity, message, open states), `tests/api/test_alert_checks_api.py` (raising, idempotence, re-raising after acknowledgement, role guard), `tests/integration/test_alert_order_link.py` (`SET NULL` on order delete, idempotence across sessions, the command's commit and exit code).
 
 ## Seed and reset flows
 
