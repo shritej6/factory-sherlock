@@ -50,6 +50,7 @@ factory-sherlock/
 |   |   |   |   |-- simulation.py
 |   |   |   |   `-- traceability.py
 |   |   |   |-- __init__.py
+|   |   |   |-- body_limit.py
 |   |   |   |-- deps.py
 |   |   |   |-- errors.py
 |   |   |   |-- request_id.py
@@ -61,6 +62,7 @@ factory-sherlock/
 |   |   |   |-- database.py
 |   |   |   |-- exceptions.py
 |   |   |   |-- logging.py
+|   |   |   |-- mysql_errors.py
 |   |   |   |-- security.py
 |   |   |   `-- throttle.py
 |   |   |-- domain/
@@ -129,7 +131,8 @@ factory-sherlock/
 |   |-- migrations/
 |   |   |-- versions/
 |   |   |   |-- 20261104_0106_create_manufacturing_schema.py
-|   |   |   `-- 20261107_2106_link_alerts_to_production_orders.py
+|   |   |   |-- 20261107_2106_link_alerts_to_production_orders.py
+|   |   |   `-- 20261107_2210_add_list_ordering_indexes.py
 |   |   |-- env.py
 |   |   `-- script.py.mako
 |   |-- tests/
@@ -139,6 +142,8 @@ factory-sherlock/
 |   |   |   |-- test_analytics_api.py
 |   |   |   |-- test_auth_and_errors.py
 |   |   |   |-- test_batches_api.py
+|   |   |   |-- test_body_limit_api.py
+|   |   |   |-- test_error_contract.py
 |   |   |   |-- test_inspection_import.py
 |   |   |   |-- test_investigations_api.py
 |   |   |   |-- test_login_throttle_api.py
@@ -147,20 +152,28 @@ factory-sherlock/
 |   |   |   |-- test_pagination_api.py
 |   |   |   |-- test_quality_api.py
 |   |   |   |-- test_simulation_api.py
+|   |   |   |-- test_status_filters_api.py
 |   |   |   `-- test_traceability_api.py
 |   |   |-- integration/
 |   |   |   |-- __init__.py
 |   |   |   |-- test_alert_order_link.py
+|   |   |   |-- test_foreign_keys.py
+|   |   |   |-- test_list_ordering_indexes.py
 |   |   |   |-- test_queries.py
 |   |   |   |-- test_simulation_persistence.py
 |   |   |   `-- test_transactions.py
 |   |   |-- unit/
 |   |   |   |-- __init__.py
 |   |   |   |-- test_alert_rules.py
+|   |   |   |-- test_body_limit.py
+|   |   |   |-- test_catalog_conflict.py
+|   |   |   |-- test_error_mapping.py
 |   |   |   |-- test_inspection_csv.py
 |   |   |   |-- test_investigation_rules.py
+|   |   |   |-- test_logging_formatter.py
 |   |   |   |-- test_login_throttle.py
 |   |   |   |-- test_quality_rules.py
+|   |   |   |-- test_schemas.py
 |   |   |   |-- test_security_and_loader.py
 |   |   |   |-- test_simulation_engine.py
 |   |   |   `-- test_state_machines.py
@@ -202,7 +215,9 @@ factory-sherlock/
 |   |   |   |-- 02-simulation-state-machine-revision.md
 |   |   |   |-- 03-migration-downgrade-rejected.md
 |   |   |   |-- 04-quality-summary-orm-bug.md
-|   |   |   `-- 05-environment-and-client-defaults.md
+|   |   |   |-- 05-environment-and-client-defaults.md
+|   |   |   |-- 06-parallel-feature-integration.md
+|   |   |   `-- 07-review-fix-wave.md
 |   |   |-- ai-use-record.md
 |   |   |-- README.md
 |   |   `-- reflection-notes.md
@@ -286,7 +301,10 @@ factory-sherlock/
 |   |   |-- week09-milestone-report.pdf
 |   |   |-- week10-milestone-report.docx
 |   |   |-- week10-milestone-report.md
-|   |   `-- week10-milestone-report.pdf
+|   |   |-- week10-milestone-report.pdf
+|   |   |-- week12-milestone-report.md
+|   |   |-- week13-milestone-report.md
+|   |   `-- week14-milestone-report.md
 |   |-- quality/
 |   |   `-- inspection-import.md
 |   |-- requirements/
@@ -314,6 +332,7 @@ factory-sherlock/
 |   |   `-- favicon.svg
 |   |-- src/
 |   |   |-- app/
+|   |   |   |-- AppLayout.test.tsx
 |   |   |   |-- AppLayout.tsx
 |   |   |   |-- nav.ts
 |   |   |   |-- providers.tsx
@@ -327,6 +346,7 @@ factory-sherlock/
 |   |   |   |   |-- ChartFrame.tsx
 |   |   |   |   |-- ControlChart.test.tsx
 |   |   |   |   |-- ControlChart.tsx
+|   |   |   |   |-- ControlChartParts.tsx
 |   |   |   |   |-- CountBarChart.tsx
 |   |   |   |   |-- DailyTrendChart.tsx
 |   |   |   |   `-- DefectRateChart.tsx
@@ -334,6 +354,7 @@ factory-sherlock/
 |   |   |       |-- Button.tsx
 |   |   |       |-- Chip.tsx
 |   |   |       |-- DataTable.tsx
+|   |   |       |-- Disclosure.test.tsx
 |   |   |       |-- Disclosure.tsx
 |   |   |       |-- Field.tsx
 |   |   |       |-- PageHeader.tsx
@@ -342,7 +363,9 @@ factory-sherlock/
 |   |   |       |-- Panel.tsx
 |   |   |       |-- SqlDisclosure.test.tsx
 |   |   |       |-- SqlDisclosure.tsx
+|   |   |       |-- States.test.tsx
 |   |   |       |-- States.tsx
+|   |   |       |-- StatTile.test.tsx
 |   |   |       |-- StatTile.tsx
 |   |   |       `-- StatusBadge.tsx
 |   |   |-- features/
@@ -354,6 +377,7 @@ factory-sherlock/
 |   |   |   |   |-- SqlExplorer.tsx
 |   |   |   |   `-- WindowControls.tsx
 |   |   |   |-- batches/
+|   |   |   |   |-- BatchActions.test.tsx
 |   |   |   |   |-- BatchActions.tsx
 |   |   |   |   |-- BatchesPage.tsx
 |   |   |   |   `-- BatchForm.tsx
@@ -380,6 +404,7 @@ factory-sherlock/
 |   |   |   |   |-- OrdersPage.tsx
 |   |   |   |   `-- OrderTransitions.tsx
 |   |   |   |-- overview/
+|   |   |   |   |-- AlertsList.test.tsx
 |   |   |   |   |-- AlertsList.tsx
 |   |   |   |   |-- MachineStatusCard.tsx
 |   |   |   |   |-- OverviewPage.test.tsx
@@ -420,6 +445,7 @@ factory-sherlock/
 |   |   |   |-- chartTransforms.test.ts
 |   |   |   |-- chartTransforms.ts
 |   |   |   |-- errors.ts
+|   |   |   |-- format.test.ts
 |   |   |   |-- format.ts
 |   |   |   |-- permissions.test.ts
 |   |   |   |-- permissions.ts
@@ -450,6 +476,7 @@ factory-sherlock/
 |   `-- vite.config.ts
 |-- scripts/
 |   |-- development/
+|   |   |-- benchmark_inspection_import.py
 |   |   |-- benchmark_simulation.py
 |   |   |-- capture_screenshots.py
 |   |   |-- export_openapi.py
@@ -575,11 +602,19 @@ factory-sherlock/
 #### logging.py
 
 - Purpose: single-line JSON logging.
-- Main symbols: `JsonFormatter` (timestamp, level, logger, message, optional `request_id`, `user_id`, `operation`, exception text), `configure_logging(level)` (root and uvicorn loggers).
+- Main symbols: `JsonFormatter` (timestamp, level, logger, message, the `LOGGED_FIELDS` allowlist `request_id`, `user_id`, `operation`, `error`, `status`, `retry_after_seconds` when present on the record, exception text), `configure_logging(level)` (root and uvicorn loggers).
 - Inputs: `LOG_LEVEL`.
 - Related: `app.main`, `app.seed`, services that log with `extra`.
 - Error handling: not applicable.
-- Testing: no dedicated test.
+- Testing: `tests/unit/test_logging_formatter.py` (allowlisted fields emitted, others dropped, `None` omitted and exceptions rendered).
+- Status: Implemented.
+
+#### mysql_errors.py
+
+- Purpose: read the MySQL error number out of a wrapped SQLAlchemy driver error in one place.
+- Main symbols: `MYSQL_DUPLICATE_KEY` (1062), `driver_args(exc)` (the `(errno, message)` tuple pymysql attaches to `exc.orig`), `mysql_error_code(exc)` (the integer, or `None`).
+- Related: `catalog_service._flush_or_conflict`, `inspection_import._write_inspections`, `api/errors.py`.
+- Testing: through `tests/unit/test_catalog_conflict.py` and `tests/unit/test_error_mapping.py` (`test_error_code_is_read_only_from_an_integer_first_argument`).
 - Status: Implemented.
 
 #### security.py
@@ -597,13 +632,13 @@ factory-sherlock/
 #### throttle.py
 
 - Purpose: slow down password guessing on `POST /auth/login`.
-- Main symbols: `LoginThrottle(max_failures, window_seconds)` with `check(username, client_ip)`, `record_failure`, `record_success(username)`, `reset`, `tracked_keys`; `get_login_throttle()` (cached, built from `Settings.login_max_failures` and `login_window_seconds`).
-- Behaviour: failures are appended as timestamps to one deque per lower-cased username and one per client address, under a `threading.Lock`; `check` prunes stamps older than the window and raises `RateLimitedError` with the seconds until the oldest stamp of the worst key expires when either key holds `max_failures` stamps; `record_success` drops the username's deque but keeps the address's. The store is one dictionary per API process.
-- Inputs: username, client address, `clock.now()`.
+- Main symbols: `LoginThrottle(max_failures, window_seconds)` with `check(account)`, `record_failure(account, client_ip)`, `record_success(account)`, `reset`, `tracked_keys`, `pending_slots`; `account_key(username, user_id)` (`id:<n>` when the username matched a row, otherwise `name:<normalised>`); `normalise_username` (NFKD, combining marks removed, casefolded); `get_login_throttle()` (cached, built from `Settings.login_max_failures` and `login_window_seconds`).
+- Behaviour: three deques of timestamps per key under a `threading.Lock`: account failures, pending reservations per account, and address failures. `check` prunes stamps older than the window and, when failures plus reservations for the account reach `max_failures`, raises `RateLimitedError` with the seconds until the oldest stamp expires; otherwise it reserves a slot. `record_failure` converts the reservation into a failure, counts the address, and raises `RateLimitedError` when the address already held `max_failures` failures, so the address only turns an already failed attempt from 401 into 429 and never blocks a correct password; `client_ip=None` skips the address. `record_success` releases the reservation and drops the account's deque but keeps the address's. The store is one dictionary per API process.
+- Inputs: account key, client address or `None`, `clock.now()`.
 - Dependencies: `app.core.clock`, `app.core.config`, `app.core.exceptions`.
-- Related: `auth_service.authenticate` calls `check` before the user lookup and `record_failure` or `record_success` after the password check; `tests/conftest.py` resets the throttle around every test (`clean_login_throttle`, autouse).
-- Error handling: `ValueError` when either limit is below 1; logs `login throttled` with `retry_after_seconds`.
-- Testing: `tests/unit/test_login_throttle.py` (9 tests with a pinned clock, for example `test_fifth_failure_is_allowed_and_sixth_attempt_is_rejected`, `test_success_clears_the_username_but_not_the_address`, `test_expired_entries_are_pruned_on_every_call`), `tests/api/test_login_throttle_api.py` (6 tests through the endpoint).
+- Related: `auth_service.authenticate` calls `check` after the user lookup and before the bcrypt check, then `record_failure` or `record_success`; `tests/conftest.py` resets the throttle around every test (`clean_login_throttle`, autouse).
+- Error handling: `ValueError` when either limit is below 1; logs `login throttled by account` or `login throttled by address` with `status` 429, `error` `RateLimitedError`, and `retry_after_seconds`.
+- Testing: `tests/unit/test_login_throttle.py` (16 test functions, 21 collected cases, pinned clock; for example `test_fifth_failure_is_allowed_and_sixth_attempt_is_rejected`, `test_success_clears_the_account_but_not_the_address`, `test_concurrent_checks_cannot_exceed_the_limit`, `test_expired_entries_are_pruned_on_every_call`), `tests/api/test_login_throttle_api.py` (10 tests through the endpoint).
 - Status: Implemented.
 
 ### backend/app/api/
@@ -635,12 +670,21 @@ factory-sherlock/
 - Testing: `tests/api/test_auth_and_errors.py::test_every_error_carries_a_request_id_header_and_field`.
 - Status: Implemented.
 
+#### body_limit.py
+
+- Purpose: reject request bodies over a size cap before authentication and before any parsing or multipart spooling.
+- Main symbols: `BodySizeLimitMiddleware` (pure ASGI), `body_limit_for(scope)`, `DEFAULT_BODY_LIMIT` (64 KiB), `IMPORT_BODY_LIMIT` (`MAX_FILE_BYTES` + 64 KiB = 1,114,112 bytes for `POST /api/v1/inspections/import`), `PayloadTooLarge` (an `HTTPException` subclass raised by the counting `receive`, because FastAPI re-raises those unchanged while reading a body), `ERROR_CODE` (`payload_too_large`).
+- Behaviour: a declared `Content-Length` over the cap is answered with 413 before the application runs; a chunked body is counted per `http.request` message and aborted with 413 once it passes the cap, replacing any response the application started. Body `{"error": "payload_too_large", "message", "details": {"limit_bytes": n}, "request_id"}`; the request id comes from `request_id_middleware`, which wraps this one, so the 413 also carries `X-Request-ID`.
+- Related: registered first in `app.main.create_app`, so it runs innermost; `inspection_csv.MAX_FILE_BYTES`.
+- Testing: `tests/unit/test_body_limit.py` (5), `tests/api/test_body_limit_api.py` (4), `tests/api/test_inspection_import.py::test_oversized_upload_is_rejected_with_413_before_the_route`.
+- Status: Implemented.
+
 #### errors.py
 
 - Purpose: translate exceptions into safe JSON responses.
-- Main function: `register_error_handlers(app)` registering handlers for `AppError` (its own status; a `Retry-After` header is added for `RateLimitedError`), `RequestValidationError` (422, per-field list), `IntegrityError` (MySQL 1062 duplicate key to 409, 1452 foreign key violation to 422, anything else to 500), `OperationalError` (1205 lock wait timeout and 1213 deadlock to 409 with a retry message, anything else to 503), `Exception` (500). Response body: `{"error", "message", "details", "request_id"}`, with the id also in the `X-Request-ID` response header. The `ErrorResponse` schema in `schemas/common.py` (used for the OpenAPI error entries) declares the same four fields.
+- Main function: `register_error_handlers(app)` registering handlers for `AppError` (its own status; a `Retry-After` header is added for `RateLimitedError`), `RequestValidationError` (422, per-field list), `IntegrityError` (MySQL 1062 duplicate key to 409, 1452 foreign key violation to 422, anything else to 500), `OperationalError` and `sqlalchemy.exc.TimeoutError` (1205 lock wait timeout and 1213 deadlock to 409 with a retry message; 3819 check constraint violation to 422 `ValidationError` with `details.constraint` parsed from `Check constraint '<name>' is violated`, empty when not parseable; 2002, 2003, 2006, 2013 and pool timeouts to 503 "The database is not reachable"; any other `OperationalError` to 503 "The database is unavailable"), `DataError` (1406 data too long to 422 "A value is too long for its column", anything else to 500), `Exception` (500). The mapping lives in the pure functions `classify_integrity`, `classify_operational`, and `classify_data`, each returning an `ErrorMapping` (status, error, message, details, log level, log message); the handlers add logging and the envelope. Response body: `{"error", "message", "details", "request_id"}`, with the id also in the `X-Request-ID` response header. The `ErrorResponse` schema in `schemas/common.py` (used for the OpenAPI error entries) declares the same four fields.
 - Error handling: uses the request id assigned by `request_id_middleware` in every response and in the log lines it writes (every `AppError` is logged at INFO as `request rejected` with `request_id`, `operation`, `error`, and `status`; database and unexpected errors are logged with `exc_info`); never returns SQL or stack traces.
-- Testing: `tests/api/test_auth_and_errors.py` (`test_not_found_is_safe`, `test_validation_errors_name_the_field`, `test_unknown_fields_are_rejected`, `test_every_error_carries_a_request_id_header_and_field`), `tests/api/test_machines_api.py::test_create_machine_and_reject_duplicate`, `tests/api/test_login_throttle_api.py::test_sixth_attempt_returns_429_with_retry_after`.
+- Testing: `tests/unit/test_error_mapping.py` (19 collected cases over the three `classify_*` functions), `tests/api/test_error_contract.py` (10, including `test_check_constraint_violation_from_the_database_is_a_422_with_the_constraint_name`, `test_data_too_long_is_a_422_and_other_data_errors_are_generic_500s`, `test_other_operational_errors_are_503_unavailable_and_pool_timeouts_not_reachable`), `tests/api/test_auth_and_errors.py` (`test_not_found_is_safe`, `test_validation_errors_name_the_field`, `test_unknown_fields_are_rejected`, `test_every_error_carries_a_request_id_header_and_field`), `tests/api/test_machines_api.py::test_create_machine_and_reject_duplicate`, `tests/api/test_login_throttle_api.py::test_sixth_attempt_returns_429_with_retry_after`.
 - Status: Implemented.
 
 #### routes/health.py
@@ -649,7 +693,7 @@ factory-sherlock/
 
 #### routes/auth.py
 
-- `POST /auth/login` (`LoginRequest` to `TokenResponse` with `expires_in_minutes`; declares a 429 `ErrorResponse`; `_client_ip` passes the direct peer address to `auth_service.authenticate` and ignores `X-Forwarded-For`), `GET /auth/me` (`UserRead`). Depends on `auth_service`, `app.core.config`. Tested by `test_auth_and_errors.py` (`test_login_rejects_bad_credentials_without_revealing_which_part`, `test_me_reflects_database_role`) and `test_login_throttle_api.py`. Implemented.
+- `POST /auth/login` (`LoginRequest` to `TokenResponse` with `expires_in_minutes`; declares a 429 `ErrorResponse`; `_client_ip` passes `request.client.host`, or `None` when the server reports no peer, to `auth_service.authenticate`; uvicorn runs with `--no-proxy-headers`, so the TCP peer is used and `X-Forwarded-For` is never applied), `GET /auth/me` (`UserRead`). Depends on `auth_service`, `app.core.config`. Tested by `test_auth_and_errors.py` (`test_login_rejects_bad_credentials_without_revealing_which_part`, `test_me_reflects_database_role`) and `test_login_throttle_api.py`. Implemented.
 
 #### routes/catalog.py
 
@@ -667,9 +711,9 @@ factory-sherlock/
 
 #### routes/quality.py
 
-- `GET /inspections?batch_id=&result=&limit=&offset=` (`Page[InspectionRead]`, items built with `quality_service.to_read`), `POST /inspections` (Operator), `POST /inspections/import` (Operator; `file: UploadFile` from a multipart body, read up to `MAX_FILE_BYTES + 1` bytes and passed with its content type and file name to `inspection_import.import_csv`; 201 with `InspectionImportResult`; the OpenAPI description states the columns and limits), `GET /quality/summary?machine_id=&batch_id=`.
+- `GET /inspections?batch_id=&result=&limit=&offset=` (`Page[InspectionRead]`, items built with `quality_service.to_read`), `POST /inspections` (Operator), `POST /inspections/import` (Operator; `file: UploadFile` from a multipart body, read up to `MAX_FILE_BYTES + 1` bytes and passed with its content type and file name to `inspection_import.import_csv`; 201 with `InspectionImportResult`; the OpenAPI description states the columns and limits; `body_limit.py` answers 413 for a request body over 1 MiB + 64 KiB before the route runs), `GET /quality/summary?machine_id=&batch_id=`.
 - Dependencies: `app.schemas.quality`, `app.schemas.common.Page`, `app.services.quality_service`, `app.services.inspection_import`, `app.services.inspection_csv.MAX_FILE_BYTES`.
-- Testing: `tests/api/test_quality_api.py` (`test_measurement_is_validated_against_specification`, `test_inspection_rejects_bad_references`, and others), `tests/api/test_inspection_import.py` (16 tests).
+- Testing: `tests/api/test_quality_api.py` (`test_measurement_is_validated_against_specification`, `test_inspection_rejects_bad_references`, and others), `tests/api/test_inspection_import.py` (20 tests), `tests/api/test_body_limit_api.py`.
 - Status: Implemented.
 
 #### routes/investigations.py
@@ -688,10 +732,10 @@ factory-sherlock/
 
 #### routes/analytics.py
 
-- `GET /analytics/queries` (`list[QueryCatalogEntry]`: all fourteen SQL files with name, header text, full SQL, `runnable` flag, and parameter names), `GET /analytics/queries/{name}` (`QueryResult`; runs one of the eight whitelisted dashboard queries (the other six return 422 with the runnable names in `details.runnable_queries`) with `window_start`, `window_end`, `machine_id`, `specification_id`, `threshold`, `hours`, `limit`; default window is the last 30 days to tomorrow), `GET /analytics/alerts?limit=&offset=` (`Page[AlertRead]`), `POST /analytics/alerts/{id}/acknowledge` (Operator guard: OPERATOR, ENGINEER, or ADMIN; a VIEWER receives 403), `POST /analytics/alerts/checks/overdue-orders` (Operator; optional `OverdueCheckRequest` body with `as_of`; returns `OverdueCheckResponse` with `checked`, `raised`, and the new alerts).
+- `GET /analytics/queries` (`list[QueryCatalogEntry]`: all fourteen SQL files with name, header text, full SQL, `runnable` flag, and parameter names), `GET /analytics/queries/{name}` (`QueryResult`; runs one of the eight whitelisted dashboard queries (the other six return 422 with the runnable names in `details.runnable_queries`) with `window_start`, `window_end`, `machine_id`, `specification_id`, `threshold`, `hours`, `limit`; default window is the last 30 days to tomorrow), `GET /analytics/alerts?limit=&offset=` (`Page[AlertRead]`), `POST /analytics/alerts/{id}/acknowledge` (Operator guard: OPERATOR, ENGINEER, or ADMIN; a VIEWER receives 403), `POST /analytics/alerts/checks/overdue-orders` (Operator; no request body, the server clock is the check date; returns `OverdueCheckResponse` with `checked`, `raised`, and the new alerts).
 - Dependencies: `app.services.analytics_service`, `app.services.alert_service`, `app.schemas.analytics`, `app.schemas.common.Page`, `app.schemas.investigation.AlertRead`, `app.core.clock`.
 - Error handling: an unknown query name raises `NotFoundError` (404) and a known but non-runnable one raises `ValidationError` (422), both in `analytics_service.run_dashboard_query`; an inverted window is also 422, and so is `characteristic_control_chart` without `specification_id`.
-- Testing: `tests/api/test_analytics_api.py` (`test_query_catalog_lists_every_sql_file`, `test_dashboard_query_returns_sql_params_and_rows`, `test_only_dashboard_queries_are_exposed` (asserts the 422 and `runnable_queries`), `test_alerts_can_be_acknowledged_once_by_operators`, and others; 7 tests), `tests/api/test_alert_checks_api.py` (7 tests), `tests/integration/test_queries.py` (`test_all_queries_run_and_agree`).
+- Testing: `tests/api/test_analytics_api.py` (`test_query_catalog_lists_every_sql_file`, `test_dashboard_query_returns_sql_params_and_rows`, `test_only_dashboard_queries_are_exposed` (asserts the 422 and `runnable_queries`), `test_alerts_can_be_acknowledged_once_by_operators`, and others; 8 tests), `tests/api/test_alert_checks_api.py` (8 tests, including `test_client_cannot_choose_the_check_date`), `tests/integration/test_queries.py` (`test_all_queries_run_and_agree`).
 - Status: Implemented.
 
 #### routes/simulation.py
@@ -707,10 +751,10 @@ factory-sherlock/
 | File | Main models | Notes | Status |
 |------|-------------|-------|--------|
 | `common.py` | `ApiModel`, `ErrorResponse` (`error`, `message`, `details`, `request_id`), `Page[T]` (`items`, `total`, `limit`, `offset`; `from_result(result, paging, convert)`) | `ErrorResponse` is attached to routes through `responses=` in `main.py` and `router.py`; `Page` imports `PageParams` and `PageResult` from `app.repositories.pagination` | Implemented |
-| `analytics.py` | `QueryCatalogEntry` (`name`, `description`, `sql`, `runnable`, `parameters`), `QueryResult` (`query`, `sql`, `params`, `rows`), `OverdueCheckRequest` (optional `as_of`, `extra="forbid"`), `OverdueCheckResponse` (`checked`, `raised`, `alerts`) | `response_model` of the two analytics query endpoints and the overdue check | Implemented |
+| `analytics.py` | `QueryCatalogEntry` (`name`, `description`, `sql`, `runnable`, `parameters`), `QueryResult` (`query`, `sql`, `params`, `rows`), `OverdueCheckResponse` (`checked`, `raised`, `alerts`) | `response_model` of the two analytics query endpoints and the overdue check, which has no request model | Implemented |
 | `auth.py` | `LoginRequest`, `TokenResponse`, `UserRead` | `UserRead.email` is `EmailStr` | Implemented |
 | `catalog.py` | `SpecificationCreate`, `SpecificationRead`, `SpecificationListItem` (adds `product_id` and `product_code`), `ProductCreate`, `ProductUpdate`, `ProductRead`, `MachineCreate`, `MachineRead`, `MachineStatusChange`, `MachineEventRead`, `DefectTypeRead`, `MaterialLotCreate`, `MaterialLotRead`; `CODE_PATTERN` | Decimal fields carry `decimal_places` limits; `CODE_PATTERN` is reused by `inspection_csv` for defect codes | Implemented |
-| `production.py` | `ProductionOrderCreate`, `ProductionOrderUpdate`, `ProductionOrderStatusChange`, `ProductionOrderRead`, `BatchMaterialInput`, `BatchMaterialRead`, `ProductionBatchCreate` (at least one material), `ProductionBatchRead`, `QuarantineRequest` (reason 5 to 255 characters) | Quantity caps: orders 100,000, batches 10,000 | Implemented |
+| `production.py` | `ProductionOrderCreate`, `ProductionOrderUpdate`, `ProductionOrderStatusChange`, `ProductionOrderRead`, `OrderStatusCounts` (`PLANNED`, `RELEASED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED` integers), `BatchMaterialInput`, `BatchMaterialRead`, `ProductionBatchCreate` (at least one material), `ProductionBatchRead` (with `order_number` from `AliasPath("order", "order_number")`), `QuarantineRequest` (reason 5 to 255 characters) | Quantity caps: orders 100,000, batches 10,000; `tests/unit/test_schemas.py` checks that `OrderStatusCounts` has exactly one field per `OrderStatus` | Implemented |
 | `quality.py` | `InspectionCreate`, `InspectionRead` (with `defect_codes`), `QualitySummary`, `InspectionImportResult` (`imported`, `failed_inspections`, `inspection_ids`) | Result is never accepted from the client | Implemented |
 | `traceability.py` | `ForwardTraceRow`, `ForwardTraceRead` (`lot_number`, `batches`), `BackwardTraceRow`, `BackwardTraceRead` (`serial_number`, `lineage`), `LotQuarantineRead` (`lot`, `quarantined_batches`) | Row models mirror the columns of queries 04 and 05 | Implemented |
 | `investigation.py` | `InvestigationCreate`, `InvestigationStatusChange`, `EvidenceRead`, `InvestigationBatchRead`, `InvestigationRead`, `AlertRead` | `AlertRead` exposes `production_order_id` and omits `acknowledged_by`; `EvidenceRead` rebuilds ordered row dictionaries from the stored `{"columns", "rows"}` JSON with a `field_validator`, so the API still returns `result_rows` as a list of objects in SQL column order | Implemented |
@@ -730,9 +774,9 @@ Testing: schema validation behaviour is covered through the API tests (`test_unk
 | `product.py` | `products`, `product_specifications` | unique `code`; unique (`product_id`, `characteristic`); `tolerance > 0`; cascade delete of specifications | Implemented |
 | `machine.py` | `machines`, `machine_events` | unique `code`; index (`machine_id`, `occurred_at`); events `RESTRICT` on machine delete | Implemented |
 | `material.py` | `material_lots`, `batch_materials` (junction) | unique `lot_number`; `quantity_received >= 0`; `quantity_used > 0`; composite primary key | Implemented |
-| `production.py` | `production_orders`, `production_batches`, `production_units` | quantity CHECKs; `ix_production_orders_status`; `ix_production_batches_machine_time`, `ix_production_batches_order`; unique `batch_number`, `serial_number`, (`batch_id`, `sequence_in_batch`) | Implemented. The `ProductionOrder` docstring points to `app.domain.state_machines` for legal status transitions |
-| `quality.py` | `defect_types`, `inspections`, `inspection_defects` (junction) | unique (`unit_id`, `specification_id`); `ix_inspections_time_result`; `RESTRICT` on specification and defect type deletes | Implemented |
-| `investigation.py` | `alerts`, `investigations`, `investigation_evidence`, `investigation_batches` (junction) | `alerts.machine_id` and `alerts.production_order_id` are nullable `SET NULL` references (the latter named `fk_alerts_production_order`, indexed by `ix_alerts_production_order`, added by the second migration); `ix_alerts_created` on (`created_at`, `id`); `window_end > window_start`; `(status = 'CLOSED') = (closed_at IS NOT NULL)`; unique (`investigation_id`, `sequence`); evidence `result_rows` as `JSON` holding `{"columns": [...], "rows": [[...]]}` (written by `investigation_service.evidence_payload`); cascade from investigation | Implemented |
+| `production.py` | `production_orders`, `production_batches`, `production_units` | quantity CHECKs; `ix_production_orders_status`, `ix_production_orders_created_id (created_at, id)`; `ix_production_batches_machine_time`, `ix_production_batches_order`, `ix_production_batches_started_id (started_at, id)`; unique `batch_number`, `serial_number`, (`batch_id`, `sequence_in_batch`) | Implemented. The `ProductionOrder` docstring points to `app.domain.state_machines` for legal status transitions |
+| `quality.py` | `defect_types`, `inspections`, `inspection_defects` (junction) | unique (`unit_id`, `specification_id`); `ix_inspections_time_result`, `ix_inspections_time_id (inspected_at, id)`, `ix_inspections_spec_time (specification_id, inspected_at)` (which also backs the `specification_id` foreign key; the implicit single-column index no longer exists); `RESTRICT` on specification and defect type deletes | Implemented |
+| `investigation.py` | `alerts`, `investigations`, `investigation_evidence`, `investigation_batches` (junction) | `alerts.machine_id` and `alerts.production_order_id` are nullable `SET NULL` references (the latter named `fk_alerts_production_order`, indexed by `ix_alerts_production_order`, added by the second migration); `ix_alerts_created` on (`created_at`, `id`); `ix_investigations_created_id (created_at, id)` (third migration); `window_end > window_start`; `(status = 'CLOSED') = (closed_at IS NOT NULL)`; unique (`investigation_id`, `sequence`); evidence `result_rows` as `JSON` holding `{"columns": [...], "rows": [[...]]}` (written by `investigation_service.evidence_payload`); cascade from investigation | Implemented |
 
 Error handling: constraint violations surface as `IntegrityError` and are mapped to 409 or converted by `_flush_or_conflict`. Testing: `tests/integration/test_transactions.py` (`test_foreign_keys_are_enforced_by_mysql`, `test_check_and_enum_constraints_reject_bad_rows`), `tests/unit/test_state_machines.py::test_every_machine_state_has_a_row`. Column-level detail is in `docs/database/data-dictionary.md`.
 
@@ -767,14 +811,14 @@ Error handling: constraint violations surface as `IntegrityError` and are mapped
 #### auth_service.py
 
 - `authenticate(session, *, username, password, client_ip) -> (User, token)`; `get_active_user(session, user_id)`; module constant `_UNKNOWN_USER_HASH`, a bcrypt hash compared against when the username does not exist so the request takes as long as a real check.
-- Behaviour: `get_login_throttle().check` runs before the user lookup and the bcrypt check; a failure calls `record_failure`, a success calls `record_success`.
+- Behaviour: the user row is looked up first, then `get_login_throttle().check(account=account_key(username, user_id))` runs before the bcrypt check, so spelling variants of a name share one bucket and a throttled attacker costs no hashing; a failure calls `record_failure(account, client_ip)`, a success calls `record_success(account)`.
 - Error handling: `RateLimitedError` (429) from the throttle; one `AuthenticationError("Invalid username or password")` for unknown user, inactive user, or wrong password; logs `login rejected` and `login accepted` with `operation`.
-- Testing: `tests/api/test_auth_and_errors.py`, `tests/api/test_login_throttle_api.py` (`test_unknown_usernames_are_throttled_like_real_ones`, `test_success_resets_the_username_counter_but_not_the_address_counter`, and others).
+- Testing: `tests/api/test_auth_and_errors.py`, `tests/api/test_login_throttle_api.py` (`test_unknown_usernames_are_throttled_like_real_ones`, `test_success_resets_the_account_counter_but_not_the_address_counter`, `test_failures_as_one_user_do_not_lock_another_user_from_the_same_address`, and others).
 - Status: Implemented.
 
 #### catalog_service.py
 
-- Functions: `_flush_or_conflict(session, what)` (turns `IntegrityError` on flush into `ConflictError`), product list, get, create (with nested specifications), update; `list_specifications` (every `ProductSpecification` with its product `joinedload`ed, ordered by product code then characteristic); machine list, get, create, `change_machine_status` (asserts transition, writes a `STATE_CHANGE` `MachineEvent` with `CRITICAL` severity when entering `FAULT`), `list_machine_events(session, machine_id, paging) -> PageResult[MachineEvent]` (404 for an unknown machine; ordered `occurred_at desc, id desc`); material lot list, get, create; `list_defect_types`.
+- Functions: `_flush_or_conflict(session, what)` (turns a duplicate-key `IntegrityError` (1062) on flush into `ConflictError` and re-raises any other integrity error for the API handlers; `tests/unit/test_catalog_conflict.py`), product list, get, create (with nested specifications), update; `list_specifications` (every `ProductSpecification` with its product `joinedload`ed, ordered by product code then characteristic); machine list, get, create, `change_machine_status` (asserts transition, writes a `STATE_CHANGE` `MachineEvent` with `CRITICAL` severity when entering `FAULT`), `list_machine_events(session, machine_id, paging) -> PageResult[MachineEvent]` (404 for an unknown machine; ordered `occurred_at desc, id desc`); material lot list, get, create; `list_defect_types`.
 - Dependencies: `app.domain.state_machines`, `app.models`, `app.repositories.pagination`, `app.schemas.catalog`, `app.core.exceptions`, `app.core.clock`.
 - Related: `production_service` and `quality_service` import `_flush_or_conflict`; `investigation_service` and `traceability_service` use the getters; `routes/catalog.py` builds `SpecificationListItem` rows from `list_specifications`.
 - Testing: `tests/api/test_machines_api.py`, `tests/api/test_machines_api.py::test_machine_state_transitions_are_enforced_and_logged`, `tests/api/test_pagination_api.py`.
@@ -783,38 +827,38 @@ Error handling: constraint violations surface as `IntegrityError` and are mapped
 #### production_service.py
 
 - Constants: `EDITABLE_ORDER_STATES` (PLANNED, RELEASED), `PRODUCIBLE_ORDER_STATES` (RELEASED, IN_PROGRESS).
-- Functions: `list_orders(session, paging, status=) -> PageResult` (ordered `created_at desc, id desc`), `get_order`, `create_order` (validates product and machine), `update_order` (only in editable states), `change_order_status` (release needs a machine; completion needs the planned quantity produced), `list_batches(session, paging, order_id=, machine_id=) -> PageResult` (ordered `started_at desc, id desc`), `get_batch`, `next_batch_number`, `create_batch` (see [data-flow.md](data-flow.md#production-batch-creation)), `complete_batch` (increments `quantity_completed` with an SQL `UPDATE`, completes the order when planned quantity is reached).
+- Functions: `list_orders(session, paging, status=) -> PageResult` (ordered `created_at desc, id desc`), `count_orders_by_status(session) -> dict[OrderStatus, int]` (one `GROUP BY`, missing statuses filled with 0), `get_order`, `create_order` (validates product and machine), `update_order` (only in editable states), `change_order_status` (release needs a machine; completion needs the planned quantity produced), `list_batches(session, paging, order_id=, machine_id=, statuses=) -> PageResult` (ordered `started_at desc, id desc`; `statuses` becomes `WHERE status IN (...)` before `paginate`), `get_batch`, `_BATCH_LOAD` (`selectinload` of `material_links` and `order`, shared by `list_batches` and `get_batch` so `order_number` needs no query per row), `next_batch_number`, `create_batch` (see [data-flow.md](data-flow.md#production-batch-creation)), `complete_batch` (increments `quantity_completed` with an SQL `UPDATE`, completes the order when planned quantity is reached).
 - Dependencies: `app.domain.state_machines`, `app.models`, `app.repositories.pagination`, `app.schemas.production`, `catalog_service`.
 - Error handling: `NotFoundError`, `ValidationError`, `ConflictError`, `InvalidTransitionError`.
-- Testing: `tests/api/test_orders_api.py`, `tests/api/test_batches_api.py`, `tests/api/test_pagination_api.py`, `tests/integration/test_transactions.py` (rollback of partial writes).
+- Testing: `tests/api/test_orders_api.py`, `tests/api/test_batches_api.py`, `tests/api/test_pagination_api.py`, `tests/api/test_status_filters_api.py` (filters, `order_number`, constant statement count, `status-counts`), `tests/integration/test_transactions.py` (rollback of partial writes).
 - Status: Implemented.
 
 #### quality_service.py
 
 - Functions: `record_inspection` (unit and specification must exist, specification must belong to the unit's product, result computed by `evaluate_measurement`, derived defect code merged with client codes, codes rejected on a passing inspection, unknown codes rejected, duplicate unit and specification pair becomes 409), `to_read`, `list_inspections(session, paging, batch_id=, result=) -> PageResult` (ordered `inspected_at desc, id desc`), `quality_summary` (produced, inspected, passed, failed, `defect_rate`).
 - Dependencies: `app.domain.quality_rules`, `app.models`, `app.repositories.pagination`, `app.schemas.quality`, `catalog_service._flush_or_conflict`.
-- Related: `inspection_import` calls `record_inspection` once per CSV row.
+- Related: `inspection_import` calls the same `evaluate_measurement` per CSV row but writes in bulk rather than through `record_inspection`.
 - Testing: `tests/api/test_quality_api.py` (3 tests), `tests/api/test_inspection_import.py`, `tests/api/test_pagination_api.py`.
 - Status: Implemented.
 
 #### inspection_csv.py
 
 - Purpose: parse an inspection CSV into typed rows and collect every structural problem before the database is consulted.
-- Constants: `REQUIRED_COLUMNS` (`serial_number`, `characteristic`, `measured_value`), `OPTIONAL_COLUMNS` (`inspected_at`, `defect_type_codes`), `MAX_FILE_BYTES` (1 MiB), `MAX_DATA_ROWS` (5000), `MAX_DEFECT_CODES` (10), `SERIAL_MAX_LENGTH` (40), `CHARACTERISTIC_MAX_LENGTH` (50), `MEASURED_MAX_ABS` (10,000,000).
-- Main symbols: `RowError` (`row`, `field`, `message`; `row` is `None` for header and file problems), `ImportRow`, `FieldError`, `import_error(message, errors)` and `file_error(message)` (build the 422 `ValidationError` with `details.errors`), `parse_csv(text) -> (rows, errors)`, field parsers `_required_text`, `_parse_measured` (decimal, finite, three places, below the `NUMERIC(10, 3)` range), `_parse_timestamp` (ISO 8601 without offset, microseconds dropped), `_parse_codes` (`|` separated, `CODE_PATTERN`, de-duplicated, at most ten), `_duplicate_error`.
-- Behaviour: header problems, an empty file, and the row limit raise immediately; row problems are collected so one upload reports everything; blank lines are skipped; column names are trimmed and lower-cased.
+- Constants: `REQUIRED_COLUMNS` (`serial_number`, `characteristic`, `measured_value`), `OPTIONAL_COLUMNS` (`inspected_at`, `defect_type_codes`), `MAX_FILE_BYTES` (1 MiB), `MAX_DATA_ROWS` (5000), `MAX_DEFECT_CODES` (10), `SERIAL_MAX_LENGTH` (40), `CHARACTERISTIC_MAX_LENGTH` (50), `MAX_HEADER_ECHO` (50), `MEASURED_MAX_ABS` (10,000,000), `MEASURED_FORMAT` (the message for a rejected `measured_value`).
+- Main symbols: `RowError` (`row`, `field`, `message`; `row` is `None` for header and file problems), `ImportRow`, `FieldError`, `import_error(message, errors)` and `file_error(message)` (build the 422 `ValidationError` with `details.errors`), `parse_csv(text) -> (rows, errors)`, `_parse_records` (rows numbered by record position, so a quoted field spanning lines does not shift them), `_read_header`, `_header_label`, field parsers `_required_text`, `_parse_serial` (required text, upper-cased), `_parse_measured` (`[+-]?[0-9]+(\.[0-9]{1,3})?` checked with `fullmatch` before `Decimal()`: ASCII digits, optional sign, no exponent, at most three places; `20.0400` is rejected as four places), `_parse_timestamp` (ISO 8601 without offset, microseconds dropped), `_parse_codes` (`|` separated, `CODE_PATTERN`, de-duplicated, at most ten), `_duplicate_error`.
+- Behaviour: the reader is `csv.reader(strict=True)` and `csv.Error` becomes a file-level 422 `The CSV structure is invalid`; header problems, an empty file, and the row limit raise immediately (unknown header names are echoed cut to 50 characters, blank cells as `(blank column N)`); row problems are collected so one upload reports everything; blank lines are skipped; column names are trimmed and lower-cased.
 - Dependencies: `csv`, `decimal`, `app.core.exceptions`, `app.schemas.catalog.CODE_PATTERN`. No session, no logging.
-- Testing: `tests/unit/test_inspection_csv.py` (14 tests, no MySQL).
+- Testing: `tests/unit/test_inspection_csv.py` (35 collected cases, no MySQL).
 - Status: Implemented.
 
 #### inspection_import.py
 
-- Purpose: import a CSV upload in one transaction through the manual entry rules.
-- Main symbols: `ACCEPTED_CONTENT_TYPES` (`text/csv`, `application/csv`, `application/vnd.ms-excel`; `application/octet-stream` only with a `.csv` name), `import_csv(session, content, *, content_type, filename) -> InspectionImportResult`, `decode_upload` (content type, non-empty, size, `utf-8-sig`), `_Lookups`, `_load_lookups` (units by serial with product id through batch and order, all specifications keyed by product and lower-cased characteristic, defect codes, already inspected (`unit_id`, `specification_id`) pairs), `_resolve_rows`, `_resolve_row`, `_rule_errors` (existing inspection, unknown codes, codes on a passing value).
-- Behaviour: every row error from the parser and the resolution is sorted by row and field and returned in one 422; otherwise each `InspectionCreate` is recorded through `quality_service.record_inspection`, and the result carries the count, the failed count, and the new ids. Nothing commits; logs `inspections imported` with the counts under `operation=inspections.import`.
-- Dependencies: `app.core.clock`, `app.domain.quality_rules`, `app.models`, `app.schemas.quality`, `inspection_csv`, `quality_service`.
+- Purpose: import a CSV upload in one transaction with the manual entry rules and a bulk write path.
+- Main symbols: `ACCEPTED_CONTENT_TYPES` (`text/csv`, `application/csv`, `application/vnd.ms-excel`; `application/octet-stream` only with a `.csv` name), `BULK_CHUNK_SIZE` (1000), `RACE_MESSAGE`, `import_csv(session, content, *, content_type, filename) -> InspectionImportResult`, `decode_upload` (content type, non-empty, size, `utf-8-sig`), `_Lookups` (including `defect_type_ids`), `_load_lookups` (units by upper-cased serial with product id through batch and order, all specifications keyed by product and lower-cased characteristic, defect codes, already inspected (`unit_id`, `specification_id`) pairs), `_existing_pairs(..., locking=)`, `_resolve_rows`, `_resolve_row` (calls `evaluate_measurement` and builds a `_Planned` row), `_rule_errors` (existing inspection, unknown codes, codes on a passing value), `_write_inspections`, `_insert_plans`, `_inspection_row`, `_bulk_insert`, `_race_error`.
+- Behaviour: every row error from the parser and the resolution is sorted by row and field and returned in one 422; otherwise `_write_inspections` opens a savepoint (`begin_nested`) and `_insert_plans` runs chunked multi-row `INSERT`s into `inspections`, selects the new ids back by (`unit_id`, `specification_id`), and inserts `inspection_defects`; the result carries the count, the failed count, and the new ids in file order. On `IntegrityError` with MySQL errno 1062 the savepoint is rolled back, `_existing_pairs` re-reads the pairs with `with_for_update(read=True)` (a plain read under `REPEATABLE READ` would keep the old snapshot), and each conflicting row becomes a 422 row error `Another import recorded this unit and characteristic first`; if no row explains the duplicate, or the errno is not 1062, the original error is re-raised for `api/errors.py`. Nothing commits; logs `inspections imported` with the counts under `operation=inspections.import`. Measured with `scripts/development/benchmark_inspection_import.py` (5000 rows, median of three, service call only): 15 statements and 0.11 s, against 10507 statements and 1.47 s for one `record_inspection` call per row.
+- Dependencies: `app.core.clock`, `app.core.database.Base`, `app.core.mysql_errors`, `app.domain.quality_rules`, `app.models`, `app.schemas.quality`, `inspection_csv`.
 - Related: `routes/quality.import_inspections`; documented in `docs/quality/inspection-import.md`; sample file `database/seeds/sample_inspection_import.csv`.
-- Testing: `tests/api/test_inspection_import.py` (16 tests including `test_one_invalid_row_rolls_back_the_whole_file`, `test_duplicate_against_the_database_is_rejected`, `test_non_csv_and_empty_uploads_are_rejected`, `test_sample_file_imports_against_the_demo_scenario`).
+- Testing: `tests/api/test_inspection_import.py` (20 tests including `test_one_invalid_row_rolls_back_the_whole_file`, `test_duplicate_against_the_database_is_rejected`, `test_serial_numbers_match_without_regard_to_case`, `test_pair_recorded_by_another_request_during_the_import_is_a_row_error`, `test_other_integrity_errors_are_not_mistaken_for_the_race`, `test_sample_file_imports_against_the_demo_scenario`).
 - Status: Implemented.
 
 #### traceability_service.py
@@ -826,7 +870,7 @@ Error handling: constraint violations surface as `IntegrityError` and are mapped
 
 #### investigation_service.py
 
-- Functions: `list_investigations(session, paging) -> PageResult` (ordered `created_at desc, id desc`, evidence and batch links eager-loaded), `get_investigation` (eager-loads evidence and batch links), `open_investigation` (machine and product existence, `InvestigationContext`, `investigate`, persist investigation plus evidence plus batch links, reload; the window order is checked by `InvestigationCreate`'s validator), `evidence_payload(rows)` (stores rows as a column list plus value arrays because MySQL reorders JSON object keys), `change_status` (transition check; closing requires a conclusion and sets `closed_at`).
+- Functions: `list_investigations(session, paging, statuses=) -> PageResult` (ordered `created_at desc, id desc`, evidence and batch links eager-loaded; `statuses` becomes `WHERE status IN (...)` before `paginate`), `get_investigation` (eager-loads evidence and batch links), `open_investigation` (machine and product existence, `InvestigationContext`, `investigate`, persist investigation plus evidence plus batch links, reload; the window order is checked by `InvestigationCreate`'s validator), `evidence_payload(rows)` (stores rows as a column list plus value arrays because MySQL reorders JSON object keys), `change_status` (transition check; closing requires a conclusion and sets `closed_at`).
 - Dependencies: `app.investigation.engine`, `app.investigation.rules`, `app.repositories.pagination`, `app.repositories.query_runner`, `app.domain.state_machines`, `catalog_service`.
 - Testing: `tests/api/test_investigations_api.py`.
 - Status: Implemented. `product_id` is stored but not used by the rules.
@@ -841,10 +885,10 @@ Error handling: constraint violations surface as `IntegrityError` and are mapped
 #### alert_service.py
 
 - Purpose: the overdue order check, shared by `POST /analytics/alerts/checks/overdue-orders` and `app/jobs/check_overdue_orders.py`.
-- Symbols: `OPEN_ORDER_STATES` (every `OrderStatus` except `COMPLETED` and `CANCELLED`), `CRITICAL_AFTER_DAYS` (2), `OverdueCheckResult` (`checked`, `raised`, `alerts`), `days_late(due_date, as_of)` (whole calendar days), `overdue_severity(days)` (`WARNING` up to two days, `CRITICAL` after), `overdue_message`, `_naive` (drops a UTC offset and microseconds), `overdue_orders(session, as_of)` (open orders with `due_date` before the check date, ordered by due date then id), `_orders_with_open_alert` (unacknowledged `ORDER_OVERDUE` alerts by `production_order_id`), `raise_overdue_order_alerts(session, as_of=None)`.
-- Behaviour: one `Alert` per overdue order without an open overdue alert, with `machine_id`, `production_order_id`, severity by days late, and `created_at = as_of`; flushes, never commits.
+- Symbols: `OPEN_ORDER_STATES` (every `OrderStatus` except `COMPLETED` and `CANCELLED`), `CRITICAL_AFTER_DAYS` (2), `OverdueCheckResult` (`checked`, `raised`, `alerts`), `days_late(due_date, as_of)` (whole calendar days), `overdue_severity(days)` (`WARNING` up to two days, `CRITICAL` after), `overdue_message`, `_naive` (drops a UTC offset and microseconds), `overdue_orders(session, as_of)` (open orders with `due_date` before the check date, ordered by due date then id), `_orders_with_open_alert` (unacknowledged `ORDER_OVERDUE` alerts by `production_order_id`), `raise_overdue_order_alerts(session, as_of=None)`; both `overdue_orders` and `_orders_with_open_alert` are locking reads (`with_for_update()`), so overlapping checks serialise on the overdue order rows and the second one sees the first one's alerts.
+- Behaviour: one `Alert` per overdue order without an open overdue alert, with `machine_id`, `production_order_id`, severity by days late, and `created_at` = the check date (server clock unless the job passes `--as-of`; the HTTP route never forwards a client value); flushes, never commits.
 - Dependencies: `app.core.clock`, `app.models`.
-- Testing: `tests/unit/test_alert_rules.py` (5 tests, no MySQL), `tests/api/test_alert_checks_api.py` (7 tests), `tests/integration/test_alert_order_link.py` (3 tests).
+- Testing: `tests/unit/test_alert_rules.py` (11 collected cases, no MySQL), `tests/api/test_alert_checks_api.py` (8 tests), `tests/integration/test_alert_order_link.py` (6 tests, including `test_concurrent_checks_raise_one_alert_per_order`).
 - Status: Implemented.
 
 #### simulation_service.py
@@ -863,10 +907,10 @@ Error handling: constraint violations surface as `IntegrityError` and are mapped
 #### check_overdue_orders.py
 
 - Purpose: run the overdue order check from the command line or a scheduler (`uv run python -m app.jobs.check_overdue_orders [--as-of 2026-11-07T08:00:00]`, `make check-overdue`).
-- Main function: `main(argv) -> int`: parses `--as-of` (ISO 8601, default now), calls `configure_logging`, opens `SessionLocal()`, calls `alert_service.raise_overdue_order_alerts`, commits, logs `overdue order check finished` with `{"checked", "raised", "alert_ids"}` under `operation=check_overdue_orders`, returns 0.
+- Main functions: `parse_args(argv)` parses `--as-of` (ISO 8601, default now; it exists to replay a past check), `run_check(as_of)` opens `SessionLocal()`, calls `alert_service.raise_overdue_order_alerts`, and commits or rolls back, `main(argv) -> int` calls `configure_logging`, logs `overdue order check finished` with `{"checked", "raised", "alert_ids"}` under `operation=check_overdue_orders`, and returns 0, or logs the exception with its traceback under the same `operation` and returns 1.
 - Dependencies: `app.core.config`, `app.core.database`, `app.core.logging`, `app.services.alert_service`.
-- Error handling: any exception rolls the session back and re-raises (non-zero exit).
-- Testing: `tests/integration/test_alert_order_link.py::test_job_commits_and_exits_zero`.
+- Error handling: any exception rolls the session back, is logged with `logger.exception`, and makes the job exit 1; nothing is written.
+- Testing: `tests/integration/test_alert_order_link.py::test_job_commits_and_exits_zero` and `test_job_rolls_back_logs_and_exits_one_on_failure`.
 - Status: Implemented. Nothing in the repository schedules it.
 
 ### backend/app/simulation/
@@ -923,7 +967,7 @@ Inputs: `InvestigationContext` and a `QueryRunner`. Outputs: `Evidence` cards an
 - Inputs: a SQLAlchemy `Select` and the parsed paging. Outputs: the page and the filtered total.
 - Dependencies: SQLAlchemy only, so `app.api.deps` and `app.schemas.common` can import it without touching the query runner.
 - Related: `catalog_service.list_machine_events`, `production_service.list_orders` and `list_batches`, `quality_service.list_inspections`, `investigation_service.list_investigations`, `analytics_service.recent_alerts`.
-- Testing: `tests/api/test_pagination_api.py` (6 tests, including `test_pages_are_stable_disjoint_and_cover_every_order` and `test_offset_past_the_end_returns_empty_items_with_total`).
+- Testing: `tests/api/test_pagination_api.py` (12 collected cases, including `test_pages_are_stable_disjoint_and_cover_every_order`, `test_offset_past_the_end_returns_empty_items_with_total`, and `test_offset_at_the_upper_bound_is_accepted`; `deps.MAX_OFFSET` caps `offset` at 1,000,000).
 - Status: Implemented.
 
 ### backend/migrations/
@@ -934,6 +978,7 @@ Inputs: `InvestigationContext` and a `QueryRunner`. Outputs: `Evidence` cards an
 | `script.py.mako` | Template for new revisions | Implemented |
 | `versions/20261104_0106_create_manufacturing_schema.py` | Revision `3a5e982c3679`: creates the 17 tables, CHECK and UNIQUE constraints, and indexes; `downgrade` drops tables in dependency order and explains why no `drop_index` calls are present | Implemented |
 | `versions/20261107_2106_link_alerts_to_production_orders.py` | Revision `383273c26ef7` (revises `3a5e982c3679`): adds the nullable `alerts.production_order_id` column, the index `ix_alerts_production_order`, and the named foreign key `fk_alerts_production_order` to `production_orders.id` with `ON DELETE SET NULL`; `downgrade` drops the constraint first, then the index, then the column, because MySQL refuses to drop an index that backs a foreign key | Implemented |
+| `versions/20261107_2210_add_list_ordering_indexes.py` | Revision `6c1f0d2a9b47` (revises `383273c26ef7`): adds `ix_inspections_time_id (inspected_at, id)`, `ix_inspections_spec_time (specification_id, inspected_at)`, `ix_production_batches_started_id (started_at, id)`, `ix_production_orders_created_id (created_at, id)`, and `ix_investigations_created_id (created_at, id)`, mirrored in the models' `__table_args__`. Creating `ix_inspections_spec_time` makes MySQL drop the implicit `specification_id` foreign key index on `inspections` when that index was auto-generated; the upgrade drops it explicitly if MySQL kept it, so the end state is deterministic, and the `downgrade` recreates `specification_id` before dropping the composite index (otherwise MySQL refuses with error 1553). `uv run alembic check` reports no drift | Implemented |
 
 Testing: `tests/conftest.py::migrated_database` runs `alembic upgrade head` on the test database once per session; `backend-ci.yml` applies migrations before the test run.
 
@@ -942,33 +987,43 @@ Testing: `tests/conftest.py::migrated_database` runs `alembic upgrade head` on t
 | Path | Scope | Needs MySQL | Status |
 |------|-------|-------------|--------|
 | `conftest.py` | Forces `APP_ENV=test`; session-scoped migration; per-test truncate, reference seed, and demo users; resets the login throttle around every test (`clean_login_throttle`, autouse); `client`, `engineer`, `operator`, `viewer`, `ids`, `simulated` fixtures; auto-marks `tests/api` and `tests/integration` as `integration` | Yes for the database fixtures | Implemented |
-| `unit/test_quality_rules.py` | Measurement evaluation, classification, defect rate (4 tests) | No | Implemented |
-| `unit/test_state_machines.py` | Order and machine transition tables (4) | No | Implemented |
+| `unit/test_quality_rules.py` | Measurement evaluation, classification, defect rate (15) | No | Implemented |
+| `unit/test_state_machines.py` | Order and machine transition tables (79) | No | Implemented |
 | `unit/test_security_and_loader.py` | bcrypt, JWT round trip and tampering, SQL catalogue completeness (14 names) (3) | No | Implemented |
-| `unit/test_simulation_engine.py` | Determinism, counts, tool wear, downtime, validation (10) | No | Implemented |
-| `unit/test_investigation_rules.py` | Rules R1 to R7 with a fake runner, including the CUSUM arithmetic and narrative (11) | No | Implemented |
-| `unit/test_alert_rules.py` | Days late, severity thresholds, message text, open order states (5) | No | Implemented |
-| `unit/test_inspection_csv.py` | Header rules, field parsers, duplicates, row limit, blank and header-only files (14) | No | Implemented |
-| `unit/test_login_throttle.py` | Sliding window, retry-after countdown, pruning, per-username and per-address limits, reset, limit validation, with a pinned clock (9) | No | Implemented |
-| `api/test_analytics_api.py` | Query catalog, dashboard query execution, alert listing and acknowledgement (7) | Yes | Implemented |
-| `api/test_alert_checks_api.py` | Overdue check: severity by days late, idempotence, re-raising after acknowledgement, orders due today, default clock, role guard, `production_order_id` in `AlertRead` (7) | Yes | Implemented |
-| `api/test_auth_and_errors.py` | Health, login, token handling, role guards, error bodies, request ids (12) | Yes | Implemented |
-| `api/test_inspection_import.py` | CSV import: valid file, header and field errors, reference and duplicate errors, limits, content types, role guard, rollback of a file with one bad row, the sample file against the demo scenario (16) | Yes | Implemented |
-| `api/test_login_throttle_api.py` | 429 with `Retry-After` on the sixth attempt, lockout of a correct password, reset, per-address and per-username independence, unknown usernames (6) | Yes | Implemented |
+| `unit/test_simulation_engine.py` | Determinism, counts, tool wear, downtime, validation (12) | No | Implemented |
+| `unit/test_investigation_rules.py` | Rules R1 to R7 with a fake runner, including the CUSUM arithmetic, the narrative, and `hours_apart` (25) | No | Implemented |
+| `unit/test_alert_rules.py` | Days late, severity thresholds, message text, open order states (11) | No | Implemented |
+| `unit/test_inspection_csv.py` | Header rules (including truncated echo of unknown names and blank cells), field parsers (the `measured_value` format, rejected forms such as `1_000`, `2.004e1`, `20.0400`), serial upper-casing, duplicates, row numbering across a quoted multi-line field, row limit, blank and header-only files, strict CSV structure errors (35) | No | Implemented |
+| `unit/test_login_throttle.py` | Sliding window, retry-after countdown, pruning, per-account lockout regardless of address, address rule only after a failure, `None` address, pending reservation that keeps 20 concurrent checks within the limit, expiry of an abandoned reservation, reset, limit validation, `normalise_username` and `account_key`, with a pinned clock (21) | No | Implemented |
+| `unit/test_body_limit.py` | `BodySizeLimitMiddleware` on a standalone ASGI app: declared and chunked oversize bodies, import cap versus default cap, normal bodies pass, the application is cut off mid-stream (5) | No | Implemented |
+| `unit/test_catalog_conflict.py` | `_flush_or_conflict` turns 1062 into `ConflictError` and re-raises every other `IntegrityError` (2) | No | Implemented |
+| `unit/test_error_mapping.py` | `classify_integrity`, `classify_operational`, `classify_data` against pymysql-style errors: 3819 with and without a parseable constraint name, connection errors and pool timeouts as "not reachable", other operational errors as "unavailable", 1205 and 1213 as 409, 1406 as 422, other data errors as 500 (19) | No | Implemented |
+| `unit/test_logging_formatter.py` | `JsonFormatter`: allowlisted fields emitted, others dropped, `None` omitted, exceptions rendered (3) | No | Implemented |
+| `unit/test_schemas.py` | Pydantic limits: code pattern, decimal places, quantity ranges, reason and conclusion lengths, window boundaries, simulation ranges, `OrderStatusCounts` has one field per `OrderStatus` (24) | No | Implemented |
+| `api/test_analytics_api.py` | Query catalog, dashboard query execution, alert listing and acknowledgement (8) | Yes | Implemented |
+| `api/test_alert_checks_api.py` | Overdue check: severity by days late, idempotence, re-raising after acknowledgement, orders due today, the real server clock, a client `as_of` body has no effect, role guard, `production_order_id` in `AlertRead` (8) | Yes | Implemented |
+| `api/test_auth_and_errors.py` | Health, login, token handling, role guards per route, the database role over the token, deactivated users, error bodies, request ids (30) | Yes | Implemented |
+| `api/test_body_limit_api.py` | Through the real app: oversized import without a token, oversized login JSON, chunked body, normal bodies pass to row validation (4) | Yes | Implemented |
+| `api/test_error_contract.py` | Error contract through the real app: generic 500, 503 for health and protected routes, retryable 409, 1452 to 422, other integrity errors to 500, documented body keys, 3819 to 422 with the constraint name, 1406 to 422, 503 "unavailable" versus "not reachable" (10) | Yes | Implemented |
+| `api/test_inspection_import.py` | CSV import: valid file, header and field errors, reference and duplicate errors, limits, content types, role guard, rollback of a file with one bad row, the sample file against the demo scenario, serial case variants, 413 before the route, a pair recorded by another request during the import, other integrity errors not mistaken for the race (20) | Yes | Implemented |
+| `api/test_login_throttle_api.py` | 429 with `Retry-After` on the sixth attempt, lockout of a correct password, reset, failures as one user never lock another from the same address, sixth failed attempt from one address is 429 even for a fresh name, unknown usernames, case and accent variants share one account, success resets the account but not the address, missing peer address (10) | Yes | Implemented |
 | `api/test_machines_api.py` | Machine creation, duplicates, status change (3) | Yes | Implemented |
-| `api/test_orders_api.py` | Order creation, validation, lifecycle, role checks (6) | Yes | Implemented |
-| `api/test_pagination_api.py` | Defaults, disjoint and complete pages, offset past the end, invalid values, filters combined with paging (6) | Yes | Implemented |
-| `api/test_batches_api.py` | Batch creation atomicity, rollback with an unavailable lot, quantity limits, lots, completion, quarantine and its idempotence, cancelled orders (9) | Yes | Implemented |
-| `api/test_quality_api.py` | Inspection recording and validation, summary (3) | Yes | Implemented |
-| `api/test_investigations_api.py` | Evidence generation on a simulated history (codes R1 to R7), lifecycle, evidence column order (4) | Yes | Implemented |
-| `api/test_traceability_api.py` | Forward and backward traces, lot quarantine cascade (3) | Yes | Implemented |
-| `api/test_simulation_api.py` | Persisted counts, determinism, validation (4) | Yes | Implemented |
-| `integration/test_alert_order_link.py` | `SET NULL` on order delete keeps the alert, idempotence across sessions, the command commits and exits 0 (3) | Yes | Implemented |
-| `integration/test_queries.py` | Every SQL file runs against simulated data and returns the documented shape (3) | Yes | Implemented |
+| `api/test_orders_api.py` | Order creation, validation, lifecycle, role checks (11) | Yes | Implemented |
+| `api/test_pagination_api.py` | Defaults, disjoint and complete pages, offset past the end, invalid values including `offset` 1,000,001, offset at the upper bound, filters combined with paging (12) | Yes | Implemented |
+| `api/test_batches_api.py` | Batch creation atomicity, rollback with an unavailable lot, quantity limits, lots, completion, quarantine and its idempotence, cancelled orders (12) | Yes | Implemented |
+| `api/test_quality_api.py` | Inspection recording and validation, summary (7) | Yes | Implemented |
+| `api/test_investigations_api.py` | Evidence generation on a simulated history (codes R1 to R7), lifecycle, evidence column order (8) | Yes | Implemented |
+| `api/test_status_filters_api.py` | Repeatable `status` on batches and investigations (one value, two values, invalid value, `total` reflects the filter, combined with `machine_id`), `order_number` on batch list and detail with a constant statement count, `status-counts` with every key, matching list totals, not captured by the id route, 401 without a token (18) | Yes | Implemented |
+| `api/test_traceability_api.py` | Forward and backward traces, lot quarantine cascade (6) | Yes | Implemented |
+| `api/test_simulation_api.py` | Persisted counts, determinism, validation (7) | Yes | Implemented |
+| `integration/test_alert_order_link.py` | `SET NULL` on order delete keeps the alert, acknowledgement keeps the link, idempotence across sessions, two concurrent checks raise one alert per order, the command commits and exits 0, the command rolls back, logs, and exits 1 on failure (6) | Yes | Implemented |
+| `integration/test_foreign_keys.py` | Every foreign key's RESTRICT, CASCADE, or SET NULL behaviour exercised by deleting parent rows (14) | Yes | Implemented |
+| `integration/test_list_ordering_indexes.py` | The four `(time, id)` indexes and `ix_inspections_spec_time` exist with the documented columns; the implicit `specification_id` index on `inspections` is gone (2) | Yes | Implemented |
+| `integration/test_queries.py` | Every SQL file runs against simulated data and returns the documented shape; query 10 subgroups cover every inspection, limits widen for smaller subgroups, the machine filter follows the optional-parameter pattern (4) | Yes | Implemented |
 | `integration/test_simulation_persistence.py` | A run spanning several 1000-row chunks persists exact counts; inspections point at the unit with the matching serial (2) | Yes | Implemented |
-| `integration/test_transactions.py` | Rollback of partial writes, foreign keys, CHECK and ENUM constraints, batch lifecycle checks, batch deletion with units, atomic quantity increment, decimal precision (8) | Yes | Implemented |
+| `integration/test_transactions.py` | Rollback of partial writes, foreign keys, CHECK and ENUM constraints, batch lifecycle checks, batch deletion with units, atomic quantity increment, decimal precision (25) | Yes | Implemented |
 
-The suite holds 162 test functions across 8 unit, 13 API, and 4 integration modules (counted from the files; parametrised cases add runs, and this document does not record a pass count). `backend-ci.yml` uploads `coverage.xml` as an artifact. A `.coverage` data file may appear under `backend/` after a local run; it is ignored by Git.
+The counts in parentheses are the test ids `uv run pytest --collect-only -q` listed on 2026-11-07 (parametrised cases counted individually): 481 across 13 unit, 16 API, and 6 integration modules. This document does not record a pass count. `backend-ci.yml` uploads `coverage.xml` as an artifact. A `.coverage` data file may appear under `backend/` after a local run; it is ignored by Git.
 
 ## database/
 
@@ -1004,7 +1059,8 @@ Query semantics and sample results are documented in `docs/database/queries.md`.
 | `development/local_mysql.sh` | Private `mysqld` without Docker: `init`, `start`, `stop`, `status`, `shell`; data under `.local/mysql`; loopback only; strict SQL mode | `.env` | Refuses to run without `.env` or `mysqld`; refuses to start when the port is in use | Implemented |
 | `development/reset_database.py` | Drops every table (foreign key checks off), then `alembic upgrade head` and `python -m app.seed [--demo]` as subprocesses | `--demo`, settings | `subprocess.run(check=True)` stops on failure | Implemented |
 | `development/export_schema.sh` | `mysqldump --no-data` of the configured database into `database/schema/schema.sql` with a generated header | `.env` | `set -euo pipefail` | Implemented |
-| `development/export_openapi.py` | Writes `app.openapi()` to `docs/api/openapi.json` (34 paths, 43 operations) and prints the path count | none | none | Implemented |
+| `development/export_openapi.py` | Writes `app.openapi()` to `docs/api/openapi.json` (35 paths, 44 operations) and prints the path count | none | none | Implemented |
+| `development/benchmark_inspection_import.py` | Times `inspection_import.import_csv` for a 5000-row file (one STEEL-SHAFT batch of 2500 units, two specifications each, 250 failing rows with an explicit defect code), three repeats, median reported with the SQL statement count and rows per second; service call only, no HTTP (`cd backend && uv run python ../scripts/development/benchmark_inspection_import.py`) | `.env`, a migrated and seeded database | Rolls the import back | Implemented (figures in `docs/quality/inspection-import.md`) |
 | `development/benchmark_simulation.py` | Times `simulation_service.run_simulation` for two request shapes (the demo shape, 3 machines by 12 batches by 20 units, and a large shape, 3 by 40 by 50), three repeats each, inside sessions that are rolled back; prints the median total time, the engine-only time, and rows per second (units plus inspections) (`make benchmark-sim`, which runs `uv run python ../scripts/development/benchmark_simulation.py` from `backend/`) | `.env`, a migrated and seeded database | Exits 2 when `APP_ENV` is `production` | Implemented (leaves no rows behind; InnoDB auto-increment counters still advance) |
 | `development/render_diagrams.py` | Renders every `docs/media/diagrams/*.mmd` to an SVG next to it using Playwright and the Mermaid library from a CDN (`make render-diagrams`, which runs `uv run --group docs python ../scripts/development/render_diagrams.py` from `backend/`) | `.mmd` files | exits non-zero on a render failure | Implemented (requires the `docs` dependency group, an installed Google Chrome, and network access for the Mermaid CDN script) |
 | `development/render_milestone_figures.py` | Renders each Mermaid block in `docs/milestones/*.md` to `docs/milestones/figures/<document>-<n>.png` (numbered by block order) with Playwright at device scale 4; reuses the browser launch and Mermaid page from `render_diagrams.py`, and `docs/milestones/build_documents.py` imports it (`make render-figures`, which runs `uv run --group docs python ../scripts/development/render_milestone_figures.py` from `backend/`) | `docs/milestones/*.md` | Prints each failed figure to stderr, continues, and exits 1 if any failed or no browser could be launched | Implemented (requires the `docs` dependency group and network access for the Mermaid CDN script) |
@@ -1018,22 +1074,22 @@ The frontend is a React 19 and TypeScript single-page application built with Vit
 |------|---------|--------|
 | `package.json`, `pnpm-lock.yaml` | pnpm package (`packageManager` pnpm 10.34.1) with scripts `dev`, `build`, `preview`, `lint`, `typecheck` (app, node, and e2e tsconfigs), `test`, `test:watch`, `test:e2e`, `test:e2e:report`, `format`, `format:check`; `@playwright/test` is a dev dependency | Implemented |
 | `vite.config.ts` | React and Tailwind plugins, `@` alias to `src` and `@tests` alias to `tests`, manual chunks for the React libraries and Recharts, dev server on 5173 with `/api` proxied to `VITE_API_PROXY_TARGET` or `http://127.0.0.1:8000`, Vitest configuration (jsdom, `tests/setup.ts`, `src/**/*.test.{ts,tsx}`) | Implemented |
-| `playwright.config.ts` | Playwright Test configuration: `testDir` `e2e`, Chromium project (installed Google Chrome when `E2E_BROWSER_CHANNEL=chrome`), base URL `E2E_BASE_URL` or `http://localhost:5183`, list and HTML reporters, trace on first retry, one retry and `forbidOnly` in CI; starts the backend with `uv run uvicorn app.main:app` on `E2E_API_PORT` (8013) from `../backend` and `pnpm dev` on the base URL's port with `VITE_API_PROXY_TARGET` pointed at the backend, reusing running servers outside CI; resolves `E2E_PASSWORD` from the environment or `SEED_DEMO_PASSWORD` in the repository `.env` before any server starts | Implemented |
+| `playwright.config.ts` | Playwright Test configuration: `testDir` `e2e`, Chromium project (installed Google Chrome when `E2E_BROWSER_CHANNEL=chrome`), base URL `E2E_BASE_URL` or `http://localhost:5183`, list and HTML reporters, trace on first retry without source files (`trace: { mode: 'on-first-retry', sources: false }`), one retry and `forbidOnly` in CI; starts the backend with `uv run uvicorn app.main:app --no-proxy-headers` on `E2E_API_PORT` (8013) from `../backend` and `pnpm dev` on the base URL's port with `VITE_API_PROXY_TARGET` pointed at the backend, reusing running servers outside CI; resolves `E2E_PASSWORD` from the environment or `SEED_DEMO_PASSWORD` in the repository `.env` before any server starts | Implemented |
 | `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`, `tsconfig.e2e.json`, `eslint.config.js`, `.prettierrc`, `.prettierignore` | TypeScript (the e2e config extends the node config and covers `e2e/` and `playwright.config.ts`), ESLint 9, Prettier configuration | Implemented |
 | `.gitignore` | `node_modules`, `dist`, `coverage`, `.vite`, `*.local`, `*.tsbuildinfo`; the Playwright output directories are ignored by the root `.gitignore` | Implemented |
 | `index.html`, `src/main.tsx` | Entry point | Implemented |
-| `e2e/` | Playwright specs: `login.spec.ts` (wrong password stays on the login page; the engineer lands on the overview with nine sidebar sections), `investigation.spec.ts` (an engineer opens, reviews, and closes an investigation on `CNC-03`), `traceability.spec.ts` (forward trace, backward trace, lot quarantine), `roles.spec.ts` (a viewer sees no mutating controls; a viewer token gets 403 on order creation), `analytics.spec.ts` (the SQL explorer runs `batches_requiring_review`); five files, nine tests. `support/env.ts` reads `E2E_PASSWORD` or `SEED_DEMO_PASSWORD`; `support/auth.ts` signs in through the form or the API and wraps authenticated `GET`s. `README.md` describes the run, the demo data assumptions, and the rows a run leaves behind | Implemented |
-| `src/app/` | `router.tsx` (routes for login, overview, machines, orders, batches, quality, investigations and detail, traceability, analytics, simulation, with a catch-all redirect), `AppLayout.tsx`, `Sidebar.tsx`, `nav.ts` (nine sections), `providers.tsx`, `queryClient.ts` (TanStack Query client), `RequireAuth.tsx` | Implemented |
-| `src/components/ui/` | Button, Chip, DataTable, Disclosure, Field, PageHeader, Pagination (`Pagination` with range text, previous and next buttons, and a page-size selector; `PageBody` dims the previous page while the next loads; with a test), Panel, SqlDisclosure (with a test), States, StatTile, StatusBadge | Implemented |
-| `src/components/charts/` | ChartFrame (with a test), CountBarChart, DailyTrendChart, DefectRateChart, ControlChart (X-bar line chart with control and specification reference lines and out-of-control markers; with a test) | Implemented |
-| `src/features/` | One folder per screen: `login`, `overview` (alerts list paged, order counts from envelope totals; with a test), `machines` (status form, `MachineEventsPanel` with the paged event timeline), `orders`, `batches`, `quality` (inspection form, paged table, `ImportInspectionsPanel.tsx` and `useImportInspections.ts` for the CSV upload with a row-error table; with a test), `investigations` (paged list, detail, evidence card, case summary, flagged batches, open form, status actions), `traceability` (search form, quarantine lot form), `analytics` (charts page, `ControlChartPanel.tsx` with specification and machine pickers running `characteristic_control_chart`, SQL explorer, window controls), `simulation` (fault scenario builder) | Implemented |
-| `src/hooks/` | `AuthProvider.tsx` and `useAuth.ts` (auth context with `login`, `logout`, `can`), `queries.ts` (TanStack Query hooks and keys, `LOOKUP_PAGE` of 500 rows for lookups, `useOrderCounts` from single-row page totals, `keepPreviousData` on paged lists), `usePageState.ts` (`limit` and `offset` per screen with `resetOffset`), `invalidate.ts` (`invalidateProduction`, which refreshes the production-related query keys after a mutation), `useMediaQuery.ts` (CSS media query hook), and `AuthProvider.test.tsx` | Implemented |
+| `e2e/` | Playwright specs: `login.spec.ts` (wrong password stays on the login page; the engineer lands on the overview with nine sidebar sections), `investigation.spec.ts` (an engineer opens, reviews, and closes an investigation on `CNC-03`), `traceability.spec.ts` (forward trace, backward trace, lot quarantine), `roles.spec.ts` (a viewer sees no mutating controls; a viewer token gets 403 on order creation), `analytics.spec.ts` (the SQL explorer runs `batches_requiring_review`); five files, nine tests. `support/env.ts` reads `E2E_PASSWORD` or `SEED_DEMO_PASSWORD`; `support/auth.ts` signs in by posting to `/auth/login` with Node's `fetch` outside the browser, storing the token under `factory-sherlock.token` in `localStorage`, and reloading `/`, so the password never enters a trace; `signInThroughForm` types the password and is used only by `login.spec.ts`, which runs with `trace: 'off'`; `apiToken`, `bearer`, and `apiGet` wrap authenticated API calls; `traceability.spec.ts` checks through `/material-lots` that the lot exists before tracing it. `README.md` describes the run, the demo data assumptions, and the rows a run leaves behind | Implemented |
+| `src/app/` | `router.tsx` (routes for login, overview, machines, orders, batches, quality, investigations and detail, traceability, analytics, simulation, with a catch-all redirect), `AppLayout.tsx` (skip link to `main#main`; with a test), `Sidebar.tsx` (`aside` labelled Sidebar, `nav` labelled Primary; when the mobile drawer opens, focus moves to its first link and Escape closes it), `nav.ts` (nine sections), `providers.tsx`, `queryClient.ts` (TanStack Query client), `RequireAuth.tsx` | Implemented |
+| `src/components/ui/` | Button, Chip, DataTable, Disclosure (returns focus to its toggle when the region closes; with a test), Field, PageHeader, Pagination (`Pagination` with range text, previous and next buttons, a page-size selector, and a clamp: when `offset` is at or past `total` it shows the last page with rows and calls `onChange` with that offset; split into `PageSizeSelect` and `PageButtons`; `PageBody` dims the previous page while the next loads; with a test), Panel, SqlDisclosure (with a test), States (`LoadingState`, `EmptyState`, `ErrorState`, `InlineNotice`, and `ErrorNotice`, which shows a mutation failure's message and request id under `role="alert"`; with a test), StatTile (`value` optional: while undefined it renders `...`, a visually hidden Loading label, and `aria-busy`; with a test), StatusBadge | Implemented |
+| `src/components/charts/` | ChartFrame (`headingLevel` prop; with a test), CountBarChart, DailyTrendChart, DefectRateChart, ControlChart (X-bar line chart: per-batch means, a grand-mean `ReferenceLine`, `stepAfter` series for the per-subgroup `ucl` and `lcl`, specification limits, and out-of-control markers judged against each row's own limits; split into `ControlChartAxes`, `WindowReferenceLines`, `ControlLimitSteps`, `ChartAnnotations`; with a test), ControlChartParts (`MeanDot`, `ControlChartTooltip`, `ControlChartLegend`, colour and dash constants) | Implemented |
+| `src/features/` | One folder per screen: `login` (a 429 shows the wait from `details.retry_after_seconds`; with a test), `overview` (alerts list paged, `ErrorNotice` on a failed acknowledgement, order counts from `GET /production-orders/status-counts`, open investigation count from a filtered one-row page, five most recent cases; with tests for the page and `AlertsList`), `machines` (status form, `MachineEventsPanel` with the paged event timeline), `orders`, `batches` (`BatchesPage` sends the status filter as `status=` and shows `batch.order_number`; `BatchForm` lists producible orders through `useProducibleOrders`; `BatchActions` with a test), `quality` (inspection form, paged table, `ImportInspectionsPanel.tsx` split into `useCsvFile`, `ImportInstructions`, `ImportOutcome`, `ImportButton`, and `ImportForm`, plus `useImportInspections.ts`, for the CSV upload with a row-error table; with a test), `investigations` (paged list, detail, evidence card, case summary, flagged batches, open form, status actions), `traceability` (search form, quarantine lot form), `analytics` (charts page, `ControlChartPanel.tsx` split into `ChartFilters`, `MachinesNotice`, `SpecificationStatus`, `ChartOutcome`, and `ControlChartResult`, with specification and machine pickers running `characteristic_control_chart`; a failed machine list is reported inline while the chart still renders for all machines; SQL explorer, window controls), `simulation` (fault scenario builder) | Implemented |
+| `src/hooks/` | `AuthProvider.tsx` and `useAuth.ts` (auth context with `login`, `logout`, `can`), `queries.ts` (TanStack Query hooks and keys, `LOOKUP_PAGE` of 500 rows for lookups, `useOrderStatusCounts` from one `GET /production-orders/status-counts`, `useProducibleOrders` joining one request per producible status with `useQueries`, `useOpenInvestigationCount` from the `total` of a one-row page filtered by `status=OPEN&status=IN_REVIEW`, `keepPreviousData` on paged lists), `usePageState.ts` (`limit` and `offset` per screen with `resetOffset`), `invalidate.ts` (`invalidateProduction`, which refreshes the production-related query keys after a mutation), `useMediaQuery.ts` (CSS media query hook), and `AuthProvider.test.tsx` | Implemented |
 | `src/services/` | `http.ts` (`API_PREFIX`, `ApiError` with `requestId`, `tokenStore` in `localStorage`, unauthorised event; a `FormData` body is sent as multipart without a `Content-Type` header), `api.ts` (`authApi`, `catalogApi` including `specifications` and paged `machineEvents`, `productionApi`, `qualityApi` including `importInspections`, `investigationApi`, `traceabilityApi`, `analyticsApi`, `simulationApi`) | Implemented |
 | `src/types/` | `api.ts` (response and request types mirroring the backend schemas, including `Page<T>`, `PageParams`, `SpecificationListItem`, `InspectionImportResult`, `InspectionImportRowError`), `constants.ts` (status lists, default window, `PAGE_SIZES` 25, 50, 100, `DEFAULT_PAGE_SIZE` 50) | Implemented |
-| `src/utils/` | `permissions.ts` (capabilities per role mirroring the backend route guards), `transitions.ts`, `format.ts`, `errors.ts` (`describeError`, `extractFieldErrors`, `extractImportRowErrors`, `isNotFound`), `chartTheme.ts`, `chartTransforms.ts` (including the control chart series, axis, and description helpers), `renderCell.tsx`, `statusTone.ts`, and the unit tests for `permissions`, `transitions`, `chartTransforms`, and `renderCell` | Implemented |
+| `src/utils/` | `permissions.ts` (capabilities per role mirroring the backend route guards), `transitions.ts`, `format.ts` (`formatNumber`, `formatPercent`, `formatMeasure`, `titleCase`, date helpers), `errors.ts` (`describeError`, `extractFieldErrors`, `extractImportRowErrors`, `isNotFound`, the `MutationMessage` union), `chartTheme.ts`, `chartTransforms.ts` (including the control chart series, axis, and description helpers; each `ControlChartPoint` carries its own `ucl` and `lcl`), `renderCell.tsx`, `statusTone.ts`, and the unit tests for `permissions`, `transitions`, `format`, `chartTransforms`, and `renderCell` | Implemented |
 | `src/styles/index.css` | Tailwind entry stylesheet | Implemented |
 | `tests/setup.ts`, `tests/helpers.tsx`, `tests/fixtures/controlChart.ts` | Vitest setup (jest-dom matchers, `ResizeObserver` stub, cleanup), render and fetch-mock helpers (`jsonResponse`, `pageOf`, `pageResponse`, `mockFetch`, `renderWithProviders`), and control chart fixture rows with the documented Query 10 limits | Implemented |
-| `src/**/*.test.ts(x)` | Vitest files colocated with the code: `http`, `permissions`, `transitions`, `chartTransforms`, `renderCell`, `Pagination`, `SqlDisclosure`, `ChartFrame`, `ControlChart`, `ControlChartPanel`, `SqlExplorer`, `LoginPage`, `OrdersPage`, `OverviewPage`, `ImportInspectionsPanel`, `TraceabilityPage`, `EvidenceCard`, `AuthProvider` (18 files; this document does not record a pass count) | Implemented |
+| `src/**/*.test.ts(x)` | Vitest files colocated with the code: `http`, `permissions`, `transitions`, `format`, `chartTransforms`, `renderCell`, `Pagination`, `SqlDisclosure`, `States`, `StatTile`, `Disclosure`, `ChartFrame`, `ControlChart`, `ControlChartPanel`, `SqlExplorer`, `LoginPage`, `OrdersPage`, `OverviewPage`, `AlertsList`, `BatchActions`, `ImportInspectionsPanel`, `TraceabilityPage`, `EvidenceCard`, `AppLayout`, `AuthProvider` (25 files, 118 tests passing with `pnpm test` on 2026-11-07) | Implemented |
 | `public/` | Static assets (`favicon.svg`) | Implemented |
 
 Build artifacts such as `tsconfig.*.tsbuildinfo` may appear after `pnpm build`, and `playwright-report/` and `test-results/` after `pnpm test:e2e`; they are not part of the source.
@@ -1047,7 +1103,7 @@ Build artifacts such as `tsconfig.*.tsbuildinfo` may appear after `pnpm build`, 
 | `docs/media/diagrams/` | Mermaid sources: `system-architecture.mmd`, `backend-components.mmd`, `local-deployment.mmd` (architecture documentation), `er-diagram.mmd` (database documentation), and `manufacturing-workflow.mmd`, `investigation-workflow.mmd`, `traceability-relationships.mmd`, `simulation-event-flow.mmd`, plus one `<name>.svg` render per source produced by `make render-diagrams` | Implemented |
 | `docs/media/screenshots/` | `README.md` plus nine PNG files (`01-login.png` to `09-analytics-sql-explorer.png`) captured on 2026-11-03 by `scripts/development/capture_screenshots.py` | Implemented |
 | `docs/media/videos/` | Only a `README.md`; no video exists | Planned |
-| `docs/api/openapi.json` | OpenAPI 3 document generated by `scripts/development/export_openapi.py`, 34 paths and 43 operations | Implemented |
+| `docs/api/openapi.json` | OpenAPI 3 document generated by `scripts/development/export_openapi.py`, 35 paths and 44 operations | Implemented |
 | `docs/database/` | Database design, data dictionary, normalization, queries, seed data (owned separately) | Implemented by its owner |
 | `docs/simulation/` | Simulation design and fault models (owned separately) | Implemented by its owner |
 | `docs/investigation/` | Investigation engine and traceability design (owned separately) | Implemented by its owner |

@@ -186,7 +186,7 @@ Notifications raised by the simulation, by quarantine actions, and by the overdu
 | alert_type | enum('HIGH_DEFECT_RATE','MACHINE_FAULT','MATERIAL_QUARANTINE','ORDER_OVERDUE') | NO | none | | Category. `ORDER_OVERDUE` is raised by `alert_service.raise_overdue_order_alerts` |
 | severity | enum('INFO','WARNING','CRITICAL') | NO | none | | Severity |
 | message | varchar(255) | NO | none | | Text; services truncate to 255 characters |
-| created_at | datetime | NO | (now()) | leading column of `ix_alerts_created (created_at, id)` | Alert time (the simulation and the quarantine services set it explicitly; the overdue check stamps its `as_of`) |
+| created_at | datetime | NO | (now()) | leading column of `ix_alerts_created (created_at, id)` | Alert time (the simulation and the quarantine services set it explicitly; the overdue check stamps the check date: the server clock, or `--as-of` when the job replays a past check) |
 | acknowledged_at | datetime | YES | NULL | | Set by `acknowledge_alert` |
 | acknowledged_by | int | YES | NULL | FK `users.id` ON DELETE SET NULL; implicit index `acknowledged_by` | Acknowledging user |
 
