@@ -3,6 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.body_limit import BodySizeLimitMiddleware
 from app.api.errors import register_error_handlers
 from app.api.request_id import request_id_middleware
 from app.api.router import api_router
@@ -24,6 +25,9 @@ def create_app() -> FastAPI:
         docs_url=None if settings.app_env == "production" else "/api/docs",
         openapi_url=None if settings.app_env == "production" else "/api/openapi.json",
     )
+    # Starlette wraps middleware in reverse order of registration: the body
+    # cap sits innermost, so the request id and CORS layers still decorate its 413.
+    app.add_middleware(BodySizeLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,

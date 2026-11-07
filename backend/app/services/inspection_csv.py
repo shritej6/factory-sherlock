@@ -3,8 +3,8 @@
 Turns the decoded upload into typed rows and collects every structural
 problem before the database is consulted. The module never opens a session,
 so it is unit tested without MySQL. Error messages name the row, the column,
-and the rule that failed; they never repeat free text from the file, and
-nothing here is logged.
+and the rule that failed; they never repeat free text from the file (header
+names are echoed truncated), and nothing here is logged.
 """
 
 import csv
@@ -13,7 +13,7 @@ import re
 from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from app.core.exceptions import ValidationError
 from app.schemas.catalog import CODE_PATTERN
@@ -26,20 +26,31 @@ MAX_DATA_ROWS = 5000
 MAX_DEFECT_CODES = 10
 SERIAL_MAX_LENGTH = 40
 CHARACTERISTIC_MAX_LENGTH = 50
+# Unknown header names are echoed back so the client can find the column; cut
+# them so a header cell cannot carry a long payload into the response.
+MAX_HEADER_ECHO = 50
 # inspections.measured_value is NUMERIC(10, 3): seven integer digits, three decimals.
 MEASURED_MAX_ABS = Decimal("10000000")
+MEASURED_FORMAT = (
+    "Must be a decimal number such as 20.040: an optional sign, digits, "
+    "and at most 3 decimal places"
+)
 _THREE_PLACES = Decimal("0.001")
 _CODE_RE = re.compile(CODE_PATTERN)
+# ASCII digits only: Decimal() would also accept 1_000, 2.004e1, and other scripts' digits.
+_MEASURED_RE = re.compile(r"[+-]?[0-9]+(\.[0-9]{1,3})?")
+_TOO_MANY_PLACES_RE = re.compile(r"[+-]?[0-9]+\.[0-9]{4,}")
 
 
 @dataclass(frozen=True)
 class RowError:
     """One problem in the upload.
 
-    ``row`` is the 1-based position below the header (blank lines count, so it
-    equals the line number minus one) and is None for header and file-level
-    problems. ``field`` is the column name, or None when the problem spans
-    columns, or "file" for file-level problems.
+    ``row`` is the 1-based position of the record below the header (blank
+    lines count, so it equals the line number minus one unless a quoted field
+    spans several lines) and is None for header and file-level problems.
+    ``field`` is the column name, or None when the problem spans columns, or
+    "file" for file-level problems.
     """
 
     row: int | None
@@ -77,23 +88,34 @@ def file_error(message: str) -> ValidationError:
 def parse_csv(text: str) -> tuple[list[ImportRow], list[RowError]]:
     """Parse the decoded file into typed rows plus every row-level error.
 
-    Header problems and the row limit raise immediately because the rest of
-    the file cannot be interpreted; row problems are collected so one upload
-    reports everything at once.
+    Header problems, the row limit, and a broken CSV structure (unbalanced
+    quotes, a field over the csv module's limit) raise immediately because the
+    rest of the file cannot be interpreted; row problems are collected so one
+    upload reports everything at once.
     """
-    reader = csv.reader(io.StringIO(text, newline=""))
-    columns = _read_header(reader)
+    reader = csv.reader(io.StringIO(text, newline=""), strict=True)
+    try:
+        columns = _read_header(reader)
+        return _parse_records(reader, columns)
+    except csv.Error as exc:
+        raise file_error("The CSV structure is invalid") from exc
+
+
+def _parse_records(
+    reader: Iterator[list[str]], columns: dict[str, int]
+) -> tuple[list[ImportRow], list[RowError]]:
     rows: list[ImportRow] = []
     errors: list[RowError] = []
     first_seen: dict[tuple[str, str], int] = {}
     data_rows = 0
-    for record in reader:
+    # Records are counted here rather than with reader.line_num, which jumps
+    # by more than one when a quoted field contains a newline.
+    for row_number, record in enumerate(reader, start=1):
         if _is_blank(record):
             continue
         data_rows += 1
         if data_rows > MAX_DATA_ROWS:
             raise file_error(f"The file has more than {MAX_DATA_ROWS} data rows")
-        row_number = reader.line_num - 1
         parsed, row_errors = _parse_record(record, columns, row_number)
         errors.extend(row_errors)
         if parsed is None:
@@ -114,9 +136,9 @@ def _read_header(reader: Iterator[list[str]]) -> dict[str, int]:
         raise file_error("The file has no header row")
     names = [name.strip().lower() for name in header]
     errors: list[RowError] = []
-    for name in names:
+    for index, name in enumerate(names):
         if name not in KNOWN_COLUMNS:
-            errors.append(RowError(None, name or None, "Unknown column"))
+            errors.append(RowError(None, _header_label(name, index), "Unknown column"))
         elif names.count(name) > 1:
             errors.append(RowError(None, name, "Column appears more than once"))
     for required in REQUIRED_COLUMNS:
@@ -125,6 +147,12 @@ def _read_header(reader: Iterator[list[str]]) -> dict[str, int]:
     if errors:
         raise import_error("The CSV header is invalid", _unique(errors))
     return {name: index for index, name in enumerate(names)}
+
+
+def _header_label(name: str, index: int) -> str:
+    if not name:
+        return f"(blank column {index + 1})"
+    return name[:MAX_HEADER_ECHO]
 
 
 def _unique(errors: list[RowError]) -> list[RowError]:
@@ -151,7 +179,7 @@ def _parse_record(
             errors.append(RowError(row, name, exc.message))
             return None
 
-    serial = field("serial_number", lambda v: _required_text(v, SERIAL_MAX_LENGTH))
+    serial = field("serial_number", _parse_serial)
     characteristic = field("characteristic", lambda v: _required_text(v, CHARACTERISTIC_MAX_LENGTH))
     measured = field("measured_value", _parse_measured)
     inspected_at = field("inspected_at", _parse_timestamp)
@@ -179,21 +207,23 @@ def _required_text(value: str, max_length: int) -> str:
     return value
 
 
+def _parse_serial(value: str) -> str:
+    # Stored serial numbers are upper case (order numbers and machine codes
+    # match CODE_PATTERN), so a lower case file value names the same unit.
+    return _required_text(value, SERIAL_MAX_LENGTH).upper()
+
+
 def _parse_measured(value: str) -> Decimal:
     if not value:
         raise FieldError("Value is required")
-    try:
-        number = Decimal(value)
-    except InvalidOperation as exc:
-        raise FieldError("Must be a decimal number such as 20.040") from exc
-    if not number.is_finite():
-        raise FieldError("Must be a decimal number such as 20.040")
+    if _MEASURED_RE.fullmatch(value) is None:
+        if _TOO_MANY_PLACES_RE.fullmatch(value) is not None:
+            raise FieldError("Must have at most 3 decimal places")
+        raise FieldError(MEASURED_FORMAT)
+    number = Decimal(value)
     if abs(number) >= MEASURED_MAX_ABS:
         raise FieldError(f"Must be smaller than {MEASURED_MAX_ABS} in absolute value")
-    quantized = number.quantize(_THREE_PLACES)
-    if quantized != number:
-        raise FieldError("Must have at most 3 decimal places")
-    return quantized
+    return number.quantize(_THREE_PLACES)
 
 
 def _parse_timestamp(value: str) -> datetime | None:
