@@ -1,6 +1,6 @@
 # Setup guide
 
-Verified against the scripts and configuration in this repository: `.env.example`, `docker-compose.yml`, `scripts/setup/init_databases.sh`, `scripts/development/local_mysql.sh`, `reset_database.py`, `export_schema.sh`, `export_openapi.py`, `backend/pyproject.toml`, `backend/alembic.ini`, `backend/app/core/config.py`, `backend/app/seed.py`, `frontend/package.json`, `frontend/vite.config.ts`. Commands are for macOS and Linux with a POSIX shell; paths are relative to the repository root unless a `cd` is shown.
+Verified against the scripts and configuration in this repository: `.env.example`, `docker-compose.yml`, `scripts/setup/init_databases.sh`, `scripts/development/local_mysql.sh`, `reset_database.py`, `export_schema.sh`, `export_openapi.py`, `benchmark_simulation.py`, `backend/pyproject.toml`, `backend/alembic.ini`, `backend/app/core/config.py`, `backend/app/seed.py`, `frontend/package.json`, `frontend/vite.config.ts`. Commands are for macOS and Linux with a POSIX shell; paths are relative to the repository root unless a `cd` is shown.
 
 ## Prerequisites
 
@@ -174,6 +174,14 @@ make render-figures
 ```
 
 Runs `scripts/development/render_milestone_figures.py` the same way and writes one PNG per Mermaid block in `docs/milestones/*.md` to `docs/milestones/figures/`, which `docs/milestones/build_documents.py` embeds in the DOCX and PDF versions of the milestone documents (the draft ERD in the Week 8 proposal).
+
+## 12. Benchmark simulation persistence
+
+```bash
+make benchmark-sim
+```
+
+Runs `scripts/development/benchmark_simulation.py` from `backend/`. It needs a migrated and seeded database (reference data is enough) and times `simulation_service.run_simulation`, the function behind `POST /api/v1/simulation/runs`, for two request shapes: the demo scenario (3 machines x 12 batches x 20 units) and a large one (3 x 40 x 50, 6000 units and 12000 inspections). Each shape runs three times inside a session that is rolled back, so no rows are left behind (only the InnoDB auto-increment counters advance). The output is one table with the shape, unit and inspection counts, median seconds for the service call, median seconds for the engine alone, and rows per second (units plus inspections over the median service time). The script refuses to run when `APP_ENV=production`. The figures recorded for the switch to bulk inserts are in `docs/simulation/simulation-design.md`.
 
 ## Troubleshooting
 

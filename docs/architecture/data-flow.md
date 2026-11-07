@@ -73,7 +73,7 @@ Points worth noting:
 
 Endpoint: `POST /api/v1/simulation/runs` (role `Engineer`). Implementation: `simulation_service.run_simulation` in `backend/app/services/simulation_service.py`. The same function is called by `app/seed.py --demo` with `database/seeds/demo_scenario.json`.
 
-The engine is pure: it receives reference rows already loaded from MySQL and returns dataclasses. The service then maps those dataclasses onto ORM rows in one transaction, so a run of 3 machines, 12 batches each, 20 units per batch, and 2 specifications per product writes 9 orders, about 36 batches, about 720 units, about 1,440 inspections, plus events and alerts, or nothing at all.
+The engine is pure: it receives reference rows already loaded from MySQL and returns dataclasses. The service then writes those dataclasses in one transaction: orders, batches, batch materials, and alerts as ORM objects (there are few of them), and units, inspections, inspection defects, and machine events as chunked multi-row `INSERT` statements of at most 1000 rows (`simulation_service.BULK_CHUNK_SIZE`). Because MySQL returns no generated ids for a multi-row insert, the service selects `serial_number, id` back after the unit insert and `unit_id, specification_id, id` after the inspection insert, and uses those natural keys to build the dependent rows. A run of 3 machines, 12 batches each, 20 units per batch, and 2 specifications per product writes 9 orders, about 36 batches, about 720 units, about 1,440 inspections, plus events and alerts, or nothing at all.
 
 ```mermaid
 sequenceDiagram
@@ -108,21 +108,25 @@ sequenceDiagram
     end
     E-->>V: SimulationOutput (orders, batches, state_changes, fault_events, alerts, final_states)
     V->>S: _next_run_tag: COUNT(production_orders) -> "SIMnnnn"
-    V->>S: add ProductionOrder per SimulatedOrder; flush()
+    V->>S: _persist_orders: add ProductionOrder per SimulatedOrder; flush()
     S->>M: INSERT production_orders
-    loop each SimulatedBatch
-        V->>S: add ProductionBatch (COMPLETED) + BatchMaterial[]; flush()
-        S->>M: INSERT production_batches, batch_materials
-        loop each SimulatedUnit
-            V->>S: add ProductionUnit + Inspection[] + InspectionDefect[]
-        end
-        V->>V: order.quantity_completed += units; COMPLETED when planned reached
-    end
-    V->>S: add MachineEvent per state change and fault event
+    V->>S: _persist_batches: add ProductionBatch (COMPLETED) + BatchMaterial[] per SimulatedBatch; flush()
+    S->>M: INSERT production_batches, batch_materials
+    V->>V: _complete_orders: quantity_completed per order; COMPLETED when planned reached
+    V->>S: _bulk_insert(ProductionUnit, rows) in chunks of 1000
+    S->>M: INSERT production_units (multi-row)
+    V->>S: _unit_ids_by_serial: SELECT serial_number, id WHERE batch_id IN (run batches)
+    V->>S: _bulk_insert(Inspection, rows) with mapped unit_id
+    S->>M: INSERT inspections (multi-row)
+    V->>S: _inspection_ids_by_unit_and_spec: SELECT unit_id, specification_id, id for the run batches
+    V->>S: _bulk_insert(InspectionDefect, rows) with mapped inspection_id
+    S->>M: INSERT inspection_defects (multi-row)
+    V->>S: _bulk_insert(MachineEvent, rows) for state changes and fault events
+    S->>M: INSERT machine_events (multi-row)
     V->>S: add Alert per SimulatedAlert
     V->>S: set Machine.status from final_states
     V->>S: flush()
-    S->>M: INSERT production_units, inspections, inspection_defects, machine_events, alerts; UPDATE machines, production_orders
+    S->>M: INSERT alerts; UPDATE production_orders, machines
     V-->>R: SimulationResult (counts)
     R-->>D: handler returns
     D->>M: COMMIT
@@ -134,6 +138,7 @@ Points worth noting:
 - Determinism: all randomness comes from `random.Random(config.seed)`; the same request against the same catalog produces the same measurements. Row ids and the `SIMnnnn` run tag depend on database state, so repeated runs produce distinct order numbers but identical measurement sequences.
 - Material lots are not marked `CONSUMED` by the simulation; `quantity_used` is recorded per batch in `batch_materials` and lot status remains `AVAILABLE` unless a lot is quarantined.
 - Order numbers are `SIMnnnn-<machine code>-nn`, batch numbers append `-Bnn`, serial numbers append `-Unnnn`, matching the manual path's format.
+- The bulk statements run on the same session and therefore inside the same transaction as the ORM writes; `tests/integration/test_transactions.py` fails the `machine_events` insert, the last bulk step, and asserts that no orders, batches, units, or inspections remain. Timings before and after the switch to bulk inserts are in `docs/simulation/simulation-design.md` under "Persistence path".
 
 ## Investigation evidence generation
 

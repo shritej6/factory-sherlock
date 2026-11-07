@@ -13,7 +13,7 @@ UV := uv
 PNPM := pnpm
 
 .PHONY: help db-init db-start db-stop migrate seed seed-demo reset-demo backend frontend \
-	test-backend test-frontend lint format export-schema export-openapi render-diagrams render-figures check-docs \
+	test-backend test-frontend benchmark-sim lint format export-schema export-openapi render-diagrams render-figures check-docs \
 	check-overdue
 
 help: ## List available targets
@@ -54,6 +54,9 @@ test-backend: ## Run the backend test suite (integration tests need MySQL)
 
 test-frontend: ## Run the frontend test suite
 	cd $(FRONTEND_DIR) && $(PNPM) test
+
+benchmark-sim: ## Time simulation persistence for two request shapes against the configured database (rolled back)
+	cd $(BACKEND_DIR) && $(UV) run python ../scripts/development/benchmark_simulation.py
 
 lint: ## Ruff check, Ruff format check, mypy, and frontend lint and typecheck when present
 	cd $(BACKEND_DIR) && $(UV) run ruff check . && $(UV) run ruff format --check . && $(UV) run mypy app
