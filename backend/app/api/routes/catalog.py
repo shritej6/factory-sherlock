@@ -12,6 +12,7 @@ from app.schemas.catalog import (
     ProductCreate,
     ProductRead,
     ProductUpdate,
+    SpecificationListItem,
 )
 from app.services import catalog_service
 
@@ -38,6 +39,23 @@ def update_product(
     session: DbSession, _: Engineer, product_id: int, body: ProductUpdate
 ) -> ProductRead:
     return ProductRead.model_validate(catalog_service.update_product(session, product_id, body))
+
+
+@router.get("/specifications", response_model=list[SpecificationListItem])
+def list_specifications(session: DbSession, _: CurrentUser) -> list[SpecificationListItem]:
+    """Flat list of every product's specifications, so a chart can pick one by id."""
+    return [
+        SpecificationListItem(
+            id=spec.id,
+            product_id=spec.product_id,
+            product_code=spec.product.code,
+            characteristic=spec.characteristic,
+            target_value=spec.target_value,
+            tolerance=spec.tolerance,
+            unit=spec.unit,
+        )
+        for spec in catalog_service.list_specifications(session)
+    ]
 
 
 @router.get("/machines", response_model=list[MachineRead])

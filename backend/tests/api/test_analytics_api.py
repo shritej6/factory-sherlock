@@ -6,11 +6,105 @@ WINDOW = {"window_start": "2026-11-01T00:00:00", "window_end": "2026-11-05T00:00
 def test_query_catalog_lists_every_sql_file(client: TestClient, viewer: dict[str, str]) -> None:
     catalog = client.get("/api/v1/analytics/queries", headers=viewer).json()
     names = {q["name"] for q in catalog}
-    assert len(catalog) == 12
+    assert len(catalog) == 13
     assert "order_completion_summary" in names and "investigation.defect_onset" in names
     assert all(
         q["description"].startswith("Query") or "Investigation" in q["description"] for q in catalog
     )
+    chart = next(q for q in catalog if q["name"] == "characteristic_control_chart")
+    assert chart["runnable"] is True
+    assert chart["parameters"] == ["specification_id", "window_start", "window_end", "machine_id"]
+    read_only = next(q for q in catalog if q["name"] == "unit_backward_trace")
+    assert read_only["runnable"] is False and read_only["parameters"] == []
+
+
+def _diameter_spec(client: TestClient, headers: dict[str, str]) -> dict[str, object]:
+    specs = client.get("/api/v1/specifications", headers=headers).json()
+    return next(
+        s for s in specs if s["product_code"] == "STEEL-SHAFT" and s["characteristic"] == "diameter"
+    )
+
+
+def test_specifications_are_listed_flat_for_every_role(
+    client: TestClient, viewer: dict[str, str]
+) -> None:
+    response = client.get("/api/v1/specifications", headers=viewer)
+    assert response.status_code == 200
+    specs = response.json()
+    assert len(specs) == 6
+    assert set(specs[0]) == {
+        "id",
+        "product_id",
+        "product_code",
+        "characteristic",
+        "target_value",
+        "tolerance",
+        "unit",
+    }
+    assert [s["product_code"] for s in specs] == sorted(s["product_code"] for s in specs)
+    diameter = _diameter_spec(client, viewer)
+    assert diameter["target_value"] == "20.000" and diameter["tolerance"] == "0.100"
+    assert client.get("/api/v1/specifications").status_code == 401
+
+
+def test_control_chart_requires_specification_id(
+    client: TestClient, viewer: dict[str, str], ids: dict[str, dict[str, int]]
+) -> None:
+    missing = client.get(
+        "/api/v1/analytics/queries/characteristic_control_chart", params=WINDOW, headers=viewer
+    )
+    assert missing.status_code == 422
+    assert "specification_id" in missing.json()["message"]
+    zero = client.get(
+        "/api/v1/analytics/queries/characteristic_control_chart",
+        params={**WINDOW, "specification_id": 0},
+        headers=viewer,
+    )
+    assert zero.status_code == 422
+    other_query = client.get(
+        "/api/v1/analytics/queries/daily_production_trend",
+        params={**WINDOW, "specification_id": 1},
+        headers=viewer,
+    )
+    assert other_query.status_code == 200
+    assert "specification_id" not in other_query.json()["params"]
+
+
+def test_control_chart_runs_with_specification_and_machine_filter(
+    client: TestClient,
+    viewer: dict[str, str],
+    ids: dict[str, dict[str, int]],
+    simulated: dict[str, object],
+) -> None:
+    spec_id = _diameter_spec(client, viewer)["id"]
+    url = "/api/v1/analytics/queries/characteristic_control_chart"
+    body = client.get(url, params={**WINDOW, "specification_id": spec_id}, headers=viewer).json()
+    assert body["query"] == "characteristic_control_chart"
+    assert body["sql"].startswith("-- Query 10")
+    assert body["params"] == {
+        "specification_id": spec_id,
+        "window_start": "2026-11-01T00:00:00",
+        "window_end": "2026-11-05T00:00:00",
+        "machine_id": None,
+    }
+    assert body["rows"] and all(r["machine_code"] == "CNC-03" for r in body["rows"])
+    first = body["rows"][0]
+    assert first["lower_spec_limit"] == 19.9 and first["upper_spec_limit"] == 20.1
+    assert first["lcl"] < first["grand_mean"] < first["ucl"]
+
+    filtered = client.get(
+        url,
+        params={**WINDOW, "specification_id": spec_id, "machine_id": ids["machines"]["CNC-03"]},
+        headers=viewer,
+    ).json()
+    assert filtered["params"]["machine_id"] == ids["machines"]["CNC-03"]
+    assert filtered["rows"] == body["rows"]
+    other = client.get(
+        url,
+        params={**WINDOW, "specification_id": spec_id, "machine_id": ids["machines"]["CNC-01"]},
+        headers=viewer,
+    ).json()
+    assert other["rows"] == []
 
 
 def test_dashboard_query_returns_sql_params_and_rows(

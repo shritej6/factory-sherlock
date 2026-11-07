@@ -2,7 +2,7 @@
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.clock import now
 from app.core.exceptions import ConflictError, NotFoundError
@@ -65,6 +65,17 @@ def update_product(session: Session, product_id: int, data: ProductUpdate) -> Pr
         setattr(product, field, value)
     session.flush()
     return product
+
+
+def list_specifications(session: Session) -> list[ProductSpecification]:
+    """Every specification with its product loaded, ordered by product code then characteristic."""
+    stmt = (
+        select(ProductSpecification)
+        .join(ProductSpecification.product)
+        .options(joinedload(ProductSpecification.product))
+        .order_by(Product.code, ProductSpecification.characteristic)
+    )
+    return list(session.scalars(stmt))
 
 
 # Machines

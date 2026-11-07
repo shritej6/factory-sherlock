@@ -2,12 +2,39 @@
 
 from datetime import datetime
 
+from app.models import Inspection
 from app.repositories.query_runner import SqlQueryRunner
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 Ids = dict[str, dict[str, int]]
 WINDOW = {"window_start": datetime(2026, 11, 1), "window_end": datetime(2026, 11, 5)}
+CONTROL_CHART_COLUMNS = [
+    "batch_id",
+    "batch_number",
+    "machine_code",
+    "subgroup_start",
+    "sample_count",
+    "mean_value",
+    "std_dev",
+    "min_value",
+    "max_value",
+    "target_value",
+    "lower_spec_limit",
+    "upper_spec_limit",
+    "grand_mean",
+    "ucl",
+    "lcl",
+]
+
+
+def _diameter_spec_id(client: TestClient, headers: dict[str, str]) -> int:
+    specs = client.get("/api/v1/specifications", headers=headers).json()
+    spec = next(
+        s for s in specs if s["product_code"] == "STEEL-SHAFT" and s["characteristic"] == "diameter"
+    )
+    return int(spec["id"])
 
 
 def test_all_queries_run_and_agree(
@@ -59,6 +86,12 @@ def test_all_queries_run_and_agree(
     trend = runner.run("daily_production_trend", WINDOW)
     assert sum(t["units_produced"] for t in trend) == 720
 
+    chart = runner.run(
+        "characteristic_control_chart",
+        {**WINDOW, "specification_id": _diameter_spec_id(client, engineer), "machine_id": None},
+    )
+    assert len(chart) == 8 and chart[-1]["mean_value"] > chart[-1]["ucl"]
+
     onset = runner.run("investigation.defect_onset", {**WINDOW, "machine_id": cnc3})
     assert onset[0]["previous_bucket_rate"] is None and onset[-1]["cumulative_rate"] > 0
     first_bad = next(o for o in onset if o["defect_rate"] >= 0.10)
@@ -75,3 +108,72 @@ def test_all_queries_run_and_agree(
         "investigation.shared_material_lots", {"batch_ids": [r["batch_id"] for r in review]}
     )
     assert lots and lots[0]["affected_batches_using_lot"] >= 1
+
+
+def test_control_chart_subgroups_cover_every_inspection_of_the_specification(
+    db_session: Session,
+    client: TestClient,
+    engineer: dict[str, str],
+    ids: Ids,
+    simulated: dict[str, object],
+) -> None:
+    spec_id = _diameter_spec_id(client, engineer)
+    rows = SqlQueryRunner(db_session).run(
+        "characteristic_control_chart",
+        {**WINDOW, "specification_id": spec_id, "machine_id": None},
+    )
+    assert rows and all(list(r) == CONTROL_CHART_COLUMNS for r in rows)
+
+    inspections = db_session.scalar(
+        select(func.count(Inspection.id)).where(Inspection.specification_id == spec_id)
+    )
+    assert sum(r["sample_count"] for r in rows) == inspections
+    assert all(r["machine_code"] == "CNC-03" and r["sample_count"] == 30 for r in rows)
+
+    first = rows[0]
+    assert first["lcl"] < first["grand_mean"] < first["ucl"]
+    assert first["lower_spec_limit"] == 19.9 and first["upper_spec_limit"] == 20.1
+    assert first["target_value"] == 20.0
+    assert all(
+        (r["grand_mean"], r["ucl"], r["lcl"]) == (first["grand_mean"], first["ucl"], first["lcl"])
+        for r in rows
+    )
+    assert all(r["min_value"] <= r["mean_value"] <= r["max_value"] for r in rows)
+    assert all(r["std_dev"] is not None and r["std_dev"] > 0 for r in rows)
+
+    keys = [(r["subgroup_start"], r["batch_id"]) for r in rows]
+    assert keys == sorted(keys)
+    assert rows[-1]["mean_value"] > rows[-1]["ucl"], "tool wear drifts the last batch above UCL"
+
+
+def test_control_chart_machine_filter_follows_the_optional_parameter_pattern(
+    db_session: Session,
+    client: TestClient,
+    engineer: dict[str, str],
+    ids: Ids,
+    simulated: dict[str, object],
+) -> None:
+    spec_id = _diameter_spec_id(client, engineer)
+    runner = SqlQueryRunner(db_session)
+    params = {**WINDOW, "specification_id": spec_id}
+    everyone = runner.run("characteristic_control_chart", {**params, "machine_id": None})
+    cnc3 = runner.run(
+        "characteristic_control_chart", {**params, "machine_id": ids["machines"]["CNC-03"]}
+    )
+    cnc1 = runner.run(
+        "characteristic_control_chart", {**params, "machine_id": ids["machines"]["CNC-01"]}
+    )
+    assert cnc3 == everyone and cnc1 == []
+
+    one_batch = runner.run(
+        "characteristic_control_chart",
+        {
+            "specification_id": spec_id,
+            "window_start": datetime(2026, 11, 2, 6, 0),
+            "window_end": datetime(2026, 11, 2, 6, 30),
+            "machine_id": None,
+        },
+    )
+    assert len(one_batch) == 1
+    assert one_batch[0]["ucl"] is not None
+    assert one_batch[0]["grand_mean"] == one_batch[0]["mean_value"]
