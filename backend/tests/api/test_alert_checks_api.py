@@ -42,7 +42,7 @@ def _order_in_state(session: Session, ids: Ids, number: str, status: OrderStatus
 
 
 def _overdue_alerts(client: TestClient, headers: dict[str, str]) -> list[dict[str, object]]:
-    alerts = client.get("/api/v1/analytics/alerts", headers=headers).json()
+    alerts = client.get("/api/v1/analytics/alerts", headers=headers).json()["items"]
     return [a for a in alerts if a["alert_type"] == "ORDER_OVERDUE"]
 
 

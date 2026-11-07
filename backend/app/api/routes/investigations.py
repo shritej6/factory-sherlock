@@ -1,6 +1,7 @@
 from fastapi import APIRouter, status
 
-from app.api.deps import CurrentUser, DbSession, Engineer
+from app.api.deps import CurrentUser, DbSession, Engineer, Paging
+from app.schemas.common import Page
 from app.schemas.investigation import (
     InvestigationCreate,
     InvestigationRead,
@@ -11,10 +12,12 @@ from app.services import investigation_service
 router = APIRouter(prefix="/investigations", tags=["investigations"])
 
 
-@router.get("", response_model=list[InvestigationRead])
-def list_investigations(session: DbSession, _: CurrentUser) -> list[InvestigationRead]:
-    rows = investigation_service.list_investigations(session)
-    return [InvestigationRead.model_validate(i) for i in rows]
+@router.get("", response_model=Page[InvestigationRead])
+def list_investigations(
+    session: DbSession, _: CurrentUser, paging: Paging
+) -> Page[InvestigationRead]:
+    result = investigation_service.list_investigations(session, paging)
+    return Page[InvestigationRead].from_result(result, paging, InvestigationRead.model_validate)
 
 
 @router.post("", response_model=InvestigationRead, status_code=status.HTTP_201_CREATED)

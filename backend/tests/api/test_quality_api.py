@@ -104,7 +104,7 @@ def test_failed_measurement_is_classified(
     assert failing["result"] == "FAIL"
     assert failing["defect_codes"] == ["OVERSIZE_DIAMETER", "SURFACE_DAMAGE"]
     listed = client.get("/api/v1/inspections", params={"result": "FAIL"}, headers=operator).json()
-    assert len(listed) == 1 and listed[0]["id"] == failing["id"]
+    assert listed["total"] == 1 and listed["items"][0]["id"] == failing["id"]
 
 
 def test_inspection_rejects_bad_references(

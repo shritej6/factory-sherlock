@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import CurrentUser, DbSession, Operator
+from app.api.deps import CurrentUser, DbSession, Operator, Paging
 from app.core.clock import now
 from app.schemas.analytics import (
     OverdueCheckRequest,
@@ -10,6 +10,7 @@ from app.schemas.analytics import (
     QueryCatalogEntry,
     QueryResult,
 )
+from app.schemas.common import Page
 from app.schemas.investigation import AlertRead
 from app.services import alert_service, analytics_service
 
@@ -53,13 +54,10 @@ def run_query(
     return QueryResult(**analytics_service.run_dashboard_query(session, name, params))
 
 
-@router.get("/alerts", response_model=list[AlertRead])
-def recent_alerts(
-    session: DbSession, _: CurrentUser, limit: int = Query(20, ge=1, le=200)
-) -> list[AlertRead]:
-    return [
-        AlertRead.model_validate(a) for a in analytics_service.recent_alerts(session, limit=limit)
-    ]
+@router.get("/alerts", response_model=Page[AlertRead])
+def recent_alerts(session: DbSession, _: CurrentUser, paging: Paging) -> Page[AlertRead]:
+    result = analytics_service.recent_alerts(session, paging)
+    return Page[AlertRead].from_result(result, paging, AlertRead.model_validate)
 
 
 @router.post("/alerts/{alert_id}/acknowledge", response_model=AlertRead)

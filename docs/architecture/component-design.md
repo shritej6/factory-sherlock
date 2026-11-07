@@ -132,7 +132,7 @@ flowchart LR
 | Module | Main symbols | Responsibility |
 |--------|--------------|----------------|
 | `router.py` | `api_router` | Mounts every route module under `/api/v1` |
-| `deps.py` | `DbSession`, `CurrentUser`, `get_current_user`, `require_roles`, `Operator`, `Engineer`, role frozensets (`READ_ROLES`, `OPERATOR_ROLES`, `ENGINEER_ROLES`) | Dependency injection for session, authenticated user, and role guards |
+| `deps.py` | `DbSession`, `CurrentUser`, `get_current_user`, `require_roles`, `Operator`, `Engineer`, role frozensets (`READ_ROLES`, `OPERATOR_ROLES`, `ENGINEER_ROLES`), `Paging`, `get_page_params` | Dependency injection for session, authenticated user, role guards, and the `limit`/`offset` query parameters of paginated lists |
 | `errors.py` | `register_error_handlers` | Maps `AppError`, `RequestValidationError`, `IntegrityError`, `OperationalError`, and `Exception` to JSON responses |
 | `routes/health.py` | `health` | `GET /health`, runs `SELECT 1` |
 | `routes/auth.py` | `login`, `me` | `POST /auth/login`, `GET /auth/me` |
@@ -154,9 +154,19 @@ Role requirements as implemented in the route signatures:
 
 ADMIN is a member of every write set. No route is admin-only, so `deps.py` defines no separate admin guard. A VIEWER can read everything but receives 403 on every mutating route, including alert acknowledgement.
 
+#### Pagination contract
+
+Six list endpoints read from tables that grow with every simulation run and therefore return one page at a time: `GET /production-orders`, `GET /production-batches`, `GET /inspections`, `GET /investigations`, `GET /machines/{machine_id}/events`, and `GET /analytics/alerts`. Each accepts `limit` (default 50, between 1 and 500) and `offset` (default 0, at least 0) in addition to its existing filters, and answers with the `Page[T]` envelope from `schemas/common.py`:
+
+```json
+{"items": [...], "total": 123, "limit": 50, "offset": 0}
+```
+
+`total` counts every row that matches the filters, ignoring `limit` and `offset`. Values outside the allowed ranges are rejected with 422; an `offset` beyond the last row returns an empty `items` list with the unchanged `total`. The query parameters are parsed once by `get_page_params` in `deps.py` into a frozen `PageParams`; services pass it to `repositories.pagination.paginate`, which runs a `SELECT COUNT(*)` over the filtered statement (ordering removed) and then the windowed statement. Every paginated ordering ends in `id` so that two requests with adjacent offsets never overlap or skip a row when timestamps tie. Catalog lists (products, machines, material lots, defect types) and the SQL query catalogue stay plain arrays because they are small and bounded.
+
 ### `app/schemas`
 
-Pydantic v2 models. Input models set `extra="forbid"` so unknown fields are rejected; response models extend `ApiModel` (`from_attributes=True`) so they can be built from ORM objects. `common.py` also defines `StatusChange` and `ErrorResponse`; the latter is attached to every route through `responses=` in `main.py` (401, 403, 404, 409, 422), so the OpenAPI document carries error schemas. `analytics.py` defines `QueryCatalogEntry` (`name`, `description`, `sql`, `runnable`, `parameters`) and `QueryResult` (`query`, `sql`, `params`, `rows`), used as `response_model` of the two analytics query endpoints. `EvidenceRead` in `investigation.py` rebuilds ordered row dictionaries from the stored `{"columns", "rows"}` JSON so the API returns a list of row objects in SQL column order. Codes (product, machine, lot, order number) share the pattern `^[A-Z0-9][A-Z0-9_-]{1,29}$`.
+Pydantic v2 models. Input models set `extra="forbid"` so unknown fields are rejected; response models extend `ApiModel` (`from_attributes=True`) so they can be built from ORM objects. `common.py` also defines the generic `Page[T]` envelope (`items`, `total`, `limit`, `offset`) used by the paginated list endpoints, and `ErrorResponse`, which is attached to every route through `responses=` in `main.py` (401, 403, 404, 409, 422), so the OpenAPI document carries error schemas. `analytics.py` defines `QueryCatalogEntry` (`name`, `description`, `sql`, `runnable`, `parameters`) and `QueryResult` (`query`, `sql`, `params`, `rows`), used as `response_model` of the two analytics query endpoints. `EvidenceRead` in `investigation.py` rebuilds ordered row dictionaries from the stored `{"columns", "rows"}` JSON so the API returns a list of row objects in SQL column order. Codes (product, machine, lot, order number) share the pattern `^[A-Z0-9][A-Z0-9_-]{1,29}$`.
 
 ### `app/services`
 
@@ -200,7 +210,7 @@ Rule to query mapping: R1 `machine_defect_rate_comparison` (file 01), R2 `recurr
 
 ### `app/repositories`
 
-`sql_loader.py` builds a cached catalog of every `.sql` file under `database/queries` (`QUERIES_DIR` resolves relative to the backend package, three levels up). `load_sql(name)` returns the raw text including the comment header; `load_query(name, expanding=...)` returns a SQLAlchemy `TextClause` with expanding bind parameters where needed; `query_names()` lists the catalog; `UnknownQueryError` is a `KeyError`. `query_runner.py` defines the `QueryRunner` protocol (`run`, `sql`) and `SqlQueryRunner`, which executes a query with a dictionary of parameters and converts `Decimal`, `date`, `datetime`, and `bytes` values into JSON-friendly Python types. `EXPANDING_PARAMS` registers `batch_ids` for `investigation.shared_material_lots`.
+`sql_loader.py` builds a cached catalog of every `.sql` file under `database/queries` (`QUERIES_DIR` resolves relative to the backend package, three levels up). `load_sql(name)` returns the raw text including the comment header; `load_query(name, expanding=...)` returns a SQLAlchemy `TextClause` with expanding bind parameters where needed; `query_names()` lists the catalog; `UnknownQueryError` is a `KeyError`. `query_runner.py` defines the `QueryRunner` protocol (`run`, `sql`) and `SqlQueryRunner`, which executes a query with a dictionary of parameters and converts `Decimal`, `date`, `datetime`, and `bytes` values into JSON-friendly Python types. `EXPANDING_PARAMS` registers `batch_ids` for `investigation.shared_material_lots`. `pagination.py` defines the frozen `PageParams` and `PageResult[T]` dataclasses and `paginate(session, stmt, paging)`, which issues the count and the windowed select for the paginated list endpoints.
 
 ### `app/models`
 

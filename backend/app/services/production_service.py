@@ -15,6 +15,7 @@ from app.models import (
     ProductionOrder,
     ProductionUnit,
 )
+from app.repositories.pagination import PageParams, PageResult, paginate
 from app.schemas.production import (
     ProductionBatchCreate,
     ProductionOrderCreate,
@@ -30,13 +31,15 @@ PRODUCIBLE_ORDER_STATES = frozenset({OrderStatus.RELEASED, OrderStatus.IN_PROGRE
 # Orders
 
 
-def list_orders(session: Session, *, status: OrderStatus | None = None) -> list[ProductionOrder]:
+def list_orders(
+    session: Session, paging: PageParams, *, status: OrderStatus | None = None
+) -> PageResult[ProductionOrder]:
     stmt = select(ProductionOrder).order_by(
         ProductionOrder.created_at.desc(), ProductionOrder.id.desc()
     )
     if status is not None:
         stmt = stmt.where(ProductionOrder.status == status)
-    return list(session.scalars(stmt))
+    return paginate(session, stmt, paging)
 
 
 def get_order(session: Session, order_id: int) -> ProductionOrder:
@@ -93,8 +96,12 @@ def change_order_status(session: Session, order_id: int, target: OrderStatus) ->
 
 
 def list_batches(
-    session: Session, *, order_id: int | None = None, machine_id: int | None = None
-) -> list[ProductionBatch]:
+    session: Session,
+    paging: PageParams,
+    *,
+    order_id: int | None = None,
+    machine_id: int | None = None,
+) -> PageResult[ProductionBatch]:
     stmt = (
         select(ProductionBatch)
         .options(selectinload(ProductionBatch.material_links))
@@ -104,7 +111,7 @@ def list_batches(
         stmt = stmt.where(ProductionBatch.production_order_id == order_id)
     if machine_id is not None:
         stmt = stmt.where(ProductionBatch.machine_id == machine_id)
-    return list(session.scalars(stmt))
+    return paginate(session, stmt, paging)
 
 
 def get_batch(session: Session, batch_id: int) -> ProductionBatch:

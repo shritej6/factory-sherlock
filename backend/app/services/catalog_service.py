@@ -18,6 +18,7 @@ from app.models import (
     ProductSpecification,
     Severity,
 )
+from app.repositories.pagination import PageParams, PageResult, paginate
 from app.schemas.catalog import MachineCreate, MaterialLotCreate, ProductCreate, ProductUpdate
 
 
@@ -127,16 +128,15 @@ def change_machine_status(
 
 
 def list_machine_events(
-    session: Session, machine_id: int, *, limit: int = 100
-) -> list[MachineEvent]:
+    session: Session, machine_id: int, paging: PageParams
+) -> PageResult[MachineEvent]:
     get_machine(session, machine_id)
     stmt = (
         select(MachineEvent)
         .where(MachineEvent.machine_id == machine_id)
         .order_by(MachineEvent.occurred_at.desc(), MachineEvent.id.desc())
-        .limit(limit)
     )
-    return list(session.scalars(stmt))
+    return paginate(session, stmt, paging)
 
 
 # Material lots and defect types
