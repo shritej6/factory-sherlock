@@ -36,7 +36,7 @@ Credentials and traces: a trace records typed values and request bodies, so the 
 
 The tests run against `database/seeds/demo_scenario.json` as loaded by `app.seed --demo` (seed 42):
 
-- Machines `CNC-01`, `CNC-02`, `CNC-03`; `CNC-03` develops tool wear from its fifth batch, so an investigation on it for the production day from 06:00 to 12:00 reports an elevated defect rate, produces evidence cards `R1` to `R6`, and flags batches. The date of that day is read from the first `CNC-03` batch through the API, not hard-coded.
+- Machines `CNC-01`, `CNC-02`, `CNC-03`; `CNC-03` develops tool wear from its fifth batch, so an investigation on it for the production day from 06:00 to 12:00 reports an elevated defect rate, produces evidence cards `R1` to `R7`, and flags batches. `investigation.spec.ts` asserts the first six cards in order and does not assert the total, so it passes with or without `R7`. The date of that day is read from the first `CNC-03` batch through the API, not hard-coded.
 - Material lot `L201` (steel bar stock) is consumed by `CNC-03` batches; the forward trace lists them and the backward trace of `<first batch>-U0001` lists `L201` and an inspection summary.
 - Lots `L301` to `L303` (`CNC-02`) and `L401` to `L403` (`CNC-01`) are `AVAILABLE`; the quarantine test picks the first of them that is still available and whose batches do not involve `CNC-03`.
 - `batches_requiring_review` with the default window (2026-11-01 to 2026-11-05) and threshold 0.10 returns at least one row, which holds while the `CNC-03` batches are not quarantined.

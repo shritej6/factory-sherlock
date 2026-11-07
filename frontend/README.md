@@ -10,16 +10,20 @@ React 19, TypeScript (strict), Vite 7, Tailwind CSS 4, React Router 7, TanStack 
 
 Run these from `frontend/`.
 
-| Command          | What it does                                                                                  |
-| ---------------- | --------------------------------------------------------------------------------------------- |
-| `pnpm install`   | Install dependencies                                                                          |
-| `pnpm dev`       | Start the dev server on http://127.0.0.1:5173 with `/api` proxied to the backend on port 8000 |
-| `pnpm lint`      | ESLint, zero errors expected                                                                  |
-| `pnpm typecheck` | `tsc --noEmit` for the app and the Vite config                                                |
-| `pnpm test`      | Vitest, jsdom environment                                                                     |
-| `pnpm build`     | Type check then production build into `dist/`                                                 |
-| `pnpm preview`   | Serve the production build locally                                                            |
-| `pnpm format`    | Prettier                                                                                      |
+| Command                | What it does                                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------------------- |
+| `pnpm install`         | Install dependencies                                                                          |
+| `pnpm dev`             | Start the dev server on http://127.0.0.1:5173 with `/api` proxied to the backend on port 8000 |
+| `pnpm lint`            | ESLint, zero errors expected                                                                  |
+| `pnpm typecheck`       | `tsc --noEmit` for the app, the Vite config, and the e2e tests (three tsconfig files)         |
+| `pnpm test`            | Vitest, jsdom environment (25 files, 118 tests on 2026-11-07)                                 |
+| `pnpm test:watch`      | Vitest in watch mode                                                                          |
+| `pnpm test:e2e`        | Playwright browser tests in `e2e/`; needs MySQL with the demo scenario (see `e2e/README.md`)  |
+| `pnpm test:e2e:report` | Open the HTML report of the last Playwright run                                               |
+| `pnpm build`           | Type check then production build into `dist/`                                                 |
+| `pnpm preview`         | Serve the production build locally                                                            |
+| `pnpm format`          | Prettier, write changes                                                                       |
+| `pnpm format:check`    | Prettier, fail on unformatted files (what CI runs)                                            |
 
 The backend must be running for the app to do anything useful:
 
@@ -59,7 +63,7 @@ Screens, all behind login:
 4. Production Orders: table with status filter, create form, transition buttons limited to legal moves (Planned to Released or Cancelled, Released to In progress or Cancelled, In progress to Completed or Cancelled), edit for Planned and Released orders.
 5. Production Batches: table with order, machine, and status filters applied by the server, create form with material lot lines, complete and quarantine actions. Each row carries `order_number`, so the table needs no second lookup of orders.
 6. Quality Inspection: inspection table with result and batch filters and defect code chips, record inspection form, defect-rate-by-machine chart.
-7. Investigations: list, open form (title, machine, window), and a case board with the summary, one evidence card per rule R1 to R6 (rule code, title, narrative, result table, and a "Show the SQL" disclosure with the query name and exact SQL), status actions (mark in review, return to open, close with a required conclusion), and flagged batches with a link into the batch table.
+7. Investigations: list, open form (title, machine, window), and a case board with the summary, one evidence card per rule R1 to R7 (rule code, title, narrative, result table, and a "Show the SQL" disclosure with the query name and exact SQL), status actions (mark in review, return to open, close with a required conclusion), and flagged batches with a link into the batch table.
 8. Material Traceability: forward trace by lot number, backward trace by serial number, quarantine a lot with a reason.
 9. Analytics and Reports: daily production trend, defect rate by machine, pass and fail distribution, defect categories, orders by status, plus an SQL Explorer that lists every documented query from the catalog. Runnable dashboard queries execute with the parameters they bind (window, machine, threshold, hours, limit) and show the rows and SQL; traceability and investigation queries are shown read-only with their SQL and a note on where they run.
 10. Simulation: form bound to `SimulationRequest` with a fault scenario builder and a result summary.
@@ -76,7 +80,7 @@ Order counts come from `GET /production-orders/status-counts`, one integer per o
 
 The control chart (query 10, `characteristic_control_chart`) returns `ucl` and `lcl` per subgroup: `grand_mean` plus or minus three pooled standard deviations divided by the square root of that subgroup's `sample_count`, so small subgroups get wider limits. `toControlChartSeries` in `utils/chartTransforms.ts` reads the limits from each row, marks a point out of control against its own limits, and the chart draws them as stepped lines (`type="stepAfter"`) around a straight grand mean reference line. `grand_mean`, `target_value`, and the specification limits are constant for the response and are read once.
 
-Accessibility: a "Skip to content" link is the first focusable element, the document title and keyboard focus follow the page heading on every route change, the mobile navigation drawer is inert when closed and closes on Escape, charts have data table alternatives, and colours meet WCAG 2.1 AA contrast in the light theme.
+Accessibility: a "Skip to content" link is the first focusable element, the document title and keyboard focus follow the page heading on every route change, the mobile navigation drawer moves focus to its first link when it opens, is inert when closed, and closes on Escape with focus returned to the Menu button; the `nav` landmark is labelled "Primary" and the `aside` "Sidebar"; disclosures and inline row forms return focus to their trigger when they close; repeated row actions (complete, quarantine, acknowledge) carry the batch or alert number in their accessible name; charts have data table alternatives; text colours meet WCAG 2.1 AA contrast in the light and dark themes.
 
 Default analytics and investigation windows are 2026-11-01 to 2026-11-05 because the seeded demonstration data is dated 2026-11-02 (one production day, 06:00 to 12:00). The windows are editable on every screen that uses them.
 

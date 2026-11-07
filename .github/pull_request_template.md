@@ -25,6 +25,8 @@ cd backend
 uv run ruff check . && uv run ruff format --check .
 uv run mypy app
 uv run pytest
+cd ../frontend
+pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build
 ```
 
 Results:
@@ -44,7 +46,7 @@ Results:
 - [ ] No secrets, credentials, or real connection strings in the diff
 - [ ] SQL uses bound parameters only (SQLAlchemy `text()` with `:name` binds or ORM); no string concatenation of user input
 - [ ] Request bodies and query parameters are validated by Pydantic schemas
-- [ ] Every new or changed mutating endpoint declares its required role (`Operator`, `Engineer`, or `Admin`)
+- [ ] Every new or changed mutating endpoint declares its required role (`Operator` or `Engineer` from `app.api.deps`; ADMIN belongs to both sets)
 - [ ] Error responses do not expose SQL text, stack traces, or driver messages
 - [ ] Logs do not include passwords, tokens, or request bodies
 

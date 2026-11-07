@@ -45,15 +45,16 @@ The platform is organized into six modules. All six are implemented in the backe
 |--------|--------------|-----------|
 | Factory simulator | Deterministic simulation of three CNC machines producing three products. Fault scenarios (tool wear, calibration drift, increased variation, material issue, downtime) change measurement distributions and machine states. Every run is reproducible from a seed. | `backend/app/simulation` |
 | Manufacturing execution (MES) | Production orders, batches, and serialized units with explicit state machines, remaining-quantity checks, and transactional batch creation. | `backend/app/services/production_service.py` |
-| Quality management | Inspections against product specifications with automatic pass or fail evaluation, defect classification, and quality summaries. | `backend/app/services/quality_service.py`, `backend/app/domain/quality_rules.py` |
-| Investigation engine | Six evidence rules (R1 to R6) that compare defect rates, find recurring defects, locate the onset hour, list preceding machine events, flag batches for review, and find shared material lots. Each rule stores the SQL it ran and the rows it saw. | `backend/app/investigation` |
+| Quality management | Inspections against product specifications with automatic pass or fail evaluation, defect classification, quality summaries, and CSV import of up to 5000 measurements in one transaction with row-level error reporting. | `backend/app/services/quality_service.py`, `backend/app/services/inspection_import.py`, `backend/app/domain/quality_rules.py` |
+| Investigation engine | Seven evidence rules (R1 to R7) that compare defect rates, find recurring defects, locate the onset hour, list preceding machine events, flag batches for review, find shared material lots, and confirm the onset with a one-sided CUSUM over hourly defect rates. Each rule stores the SQL it ran and the rows it saw. | `backend/app/investigation` |
 | Traceability | Forward trace from a material lot to the batches, units, and orders it touched; backward trace from a serial number to its lot, machine, and inspections; quarantine of a batch or a whole lot with cascading alerts. | `backend/app/services/traceability_service.py` |
-| Production intelligence dashboard | React application with an overview, machine and order management, inspections, traceability search, the investigation case board, a SQL explorer for the analytical queries, and a simulation control panel. | `frontend/src` |
+| Production intelligence dashboard | React application with an overview, machine and order management, inspections with a CSV import panel, traceability search, the investigation case board, a SQL explorer for the analytical queries, a per-characteristic control chart, and a simulation control panel. | `frontend/src` |
 
 Supporting capabilities:
 
-- Authentication with JSON Web Tokens and four roles (viewer, operator, engineer, admin). Mutating endpoints require operator or engineer roles.
-- Typed application errors mapped to a consistent JSON error shape, including field-level validation messages.
+- Authentication with JSON Web Tokens and four roles (viewer, operator, engineer, admin). Mutating endpoints require operator or engineer roles. Failed logins are throttled per account, and per client address once an attempt has failed (`backend/app/core/throttle.py`); the sixth failure inside the window returns 429 with a `Retry-After` header.
+- Typed application errors mapped to a consistent JSON error shape, including field-level validation messages. Request bodies are capped before authentication (64 KiB, or 1 MiB + 64 KiB for the CSV import) and answered with 413 when over.
+- Paginated lists: the six list endpoints take `limit` (1 to 500, default 50) and `offset` and return `{items, total, limit, offset}`.
 - Request-scoped database transactions: a request either commits everything or nothing.
 - Alembic migrations as the single source of schema truth, with a generated `schema.sql` for review.
 - A least-privilege MySQL user created by the setup script; the application never connects as root.
@@ -62,7 +63,7 @@ Supporting capabilities:
 
 Most dashboards present conclusions. Factory Sherlock presents evidence.
 
-When an engineer opens an investigation for a machine and a time window, the investigation engine runs its six rules against MySQL. Each rule produces an evidence card containing:
+When an engineer opens an investigation for a machine and a time window, the investigation engine runs its seven rules against MySQL. Each rule produces an evidence card containing:
 
 - a title and a short narrative in plain language,
 - the name of the SQL file that was executed,
@@ -98,15 +99,15 @@ Every component is free to use and runs on a laptop. No GPUs, paid services, or 
 | Layer | Choice | Why |
 |-------|--------|-----|
 | Database | MySQL 8.4 | Required by the course. Supports CHECK constraints, window functions, CTEs, LATERAL joins, ROLLUP, and JSON columns, all of which the project uses. |
-| Migrations | Alembic | Versioned, reviewable schema changes. The migration file is the authoritative DDL; `database/schema/schema.sql` is generated from it. |
-| Backend | Python 3.13, FastAPI, SQLAlchemy 2, Pydantic v2 | Typed request and response models, automatic OpenAPI documentation, a mature ORM with explicit transaction control, and first-class raw SQL support. |
+| Migrations | Alembic | Versioned, reviewable schema changes. The three migration files are the authoritative DDL; `database/schema/schema.sql` is generated from the migrated database. |
+| Backend | Python 3.12 or later (3.13 on the development machine), FastAPI, SQLAlchemy 2, Pydantic v2 | Typed request and response models, automatic OpenAPI documentation, a mature ORM with explicit transaction control, and first-class raw SQL support. |
 | Authentication | PyJWT, bcrypt | Standard signed tokens and password hashing without an external identity service. |
 | Python tooling | uv, ruff, mypy (strict), pytest, pytest-cov | Fast installs, one linter and formatter, strict static typing, and coverage reporting. |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, React Router 7, TanStack Query, Recharts | A typed component model, fast local builds, declarative data fetching with caching, and a charting library that works with plain data arrays. |
-| Frontend tooling | pnpm, ESLint, Prettier, Vitest, Testing Library | Reproducible installs, consistent style, and component tests that exercise behaviour rather than implementation. |
-| Continuous integration | GitHub Actions | Backend and frontend workflows run lint, type checks, and tests against a MySQL service container on every push and pull request. |
+| Frontend tooling | pnpm, ESLint, Prettier, Vitest, Testing Library, Playwright | Reproducible installs, consistent style, component tests that exercise behaviour rather than implementation, and browser tests against the real backend. |
+| Continuous integration | GitHub Actions | Five workflows: Backend CI, Frontend CI, Docs Lint, Compose Smoke, and End-to-End. Lint, type checks, and tests run against a MySQL service container on every push and pull request; End-to-End runs the Playwright suite against a seeded database. |
 | Diagrams | Mermaid sources rendered to SVG | Diagrams live in version control as text and are rendered with `scripts/development/render_diagrams.py`. |
-| Optional | Docker Compose | Provides MySQL for developers who prefer a container. The project was developed against a local MySQL binary and the compose file has not been executed on this machine. |
+| Optional | Docker Compose | Provides MySQL for developers who prefer a container. The project was developed against a local MySQL binary; the compose path is verified by the Compose Smoke workflow, which starts the service in GitHub Actions, checks the schemas and the application user's grants, and connects as that user. |
 
 ## Database design
 
@@ -121,7 +122,7 @@ Core entities and their relationships:
 - `production_batches` consume `material_lots` through `batch_materials`.
 - `inspections` measure one unit against one specification and are classified by `defect_types` through `inspection_defects`.
 - `machines` log `machine_events` (state changes, tool wear, calibration, maintenance, downtime).
-- `investigations` collect `investigation_evidence` and flag `production_batches` through `investigation_batches`; `alerts` are raised against machines and acknowledged by `users`.
+- `investigations` collect `investigation_evidence` and flag `production_batches` through `investigation_batches`; `alerts` are raised against machines or production orders and acknowledged by `users`.
 
 Lifecycle states are enforced in two places. The database restricts each status column to its ENUM domain. The service layer enforces the allowed transitions between states (for example, an order moves PLANNED to RELEASED to IN_PROGRESS to COMPLETED, and a quarantined batch cannot leave quarantine) through transition tables in `backend/app/domain/state_machines.py`.
 
@@ -129,7 +130,7 @@ Full documentation: [database design](docs/database/database-design.md), [data d
 
 ## Analytical queries
 
-Twelve SQL files under `database/queries` are loaded at runtime and documented in [queries.md](docs/database/queries.md). They use common table expressions, window functions (`RANK`, `SUM OVER`), `LATERAL` joins, `ROLLUP` with `GROUPING`, correlated `EXISTS`, `GROUP_CONCAT`, and an optional-parameter pattern so one query serves both the fleet view and a single machine.
+Fourteen SQL files under `database/queries` (ten numbered dashboard and traceability queries, four investigation queries) are loaded at runtime and documented in [queries.md](docs/database/queries.md). They use common table expressions, window functions (`RANK`, `SUM OVER`), `LATERAL` joins, `ROLLUP` with `GROUPING`, correlated `EXISTS`, `GROUP_CONCAT`, sample statistics (`STDDEV_SAMP`, `VAR_SAMP`), and an optional-parameter pattern so one query serves both the fleet view and a single machine. Eight of the ten numbered queries run through `GET /analytics/queries/{name}`; the two trace queries run through the traceability endpoints.
 
 | File | Business question |
 |------|-------------------|
@@ -142,7 +143,9 @@ Twelve SQL files under `database/queries` are loaded at runtime and documented i
 | `07_order_completion_summary.sql` | Planned versus completed quantities by product and status, with subtotals. |
 | `08_batches_requiring_review.sql` | Which batches exceed a defect-rate threshold and are not yet under investigation? |
 | `09_daily_production_trend.sql` | Daily units produced and failed per machine. |
+| `10_characteristic_control_chart.sql` | For one measured characteristic, how did the batch mean and spread move over a window, and which batches fall outside three-sigma control limits computed per subgroup? |
 | `investigation/defect_onset.sql` | In which hour did the defect rate first rise, and how did it accumulate? |
+| `investigation/hourly_defect_rates.sql` | Hour by hour, how many units did a machine inspect and how many failed (input to the R7 CUSUM test)? |
 | `investigation/machine_events_before_onset.sql` | Which events happened on the machine in the hours before onset? |
 | `investigation/shared_material_lots.sql` | Which material lots do the flagged batches have in common? |
 
@@ -155,7 +158,8 @@ factory-sherlock/
       api/            routes, dependencies, error handlers
       core/           settings, database session, security, logging
       domain/         pure rules: state machines, measurement evaluation
-      investigation/  evidence rules R1 to R6, engine, summary
+      investigation/  evidence rules R1 to R7, engine, summary
+      jobs/           overdue order check command (make check-overdue)
       models/         SQLAlchemy models (17 tables)
       repositories/   SQL loader and query runner
       schemas/        Pydantic request and response models
@@ -164,13 +168,13 @@ factory-sherlock/
     migrations/       Alembic environment and versions
     tests/            unit, api, and integration tests
   database/
-    queries/          twelve documented SQL files loaded at runtime
+    queries/          fourteen documented SQL files loaded at runtime
     schema/           generated schema.sql
     seeds/            reference data SQL and demo scenario JSON
     documentation/    index for the database artefacts
-  frontend/           React, TypeScript, Vite application
-  docs/               architecture, database, simulation, investigation,
-                      requirements, development, testing, decisions,
+  frontend/           React, TypeScript, Vite application; Playwright tests in e2e/
+  docs/               architecture, api, database, simulation, investigation,
+                      quality, requirements, development, testing, decisions,
                       milestones, media, ai_evidence
   scripts/            setup and development scripts
   .github/            CI workflows, issue and pull request templates
@@ -182,7 +186,7 @@ A file-by-file description is in [repository-structure.md](docs/architecture/rep
 
 Prerequisites:
 
-- Python 3.13 and [uv](https://docs.astral.sh/uv/)
+- Python 3.12 or later and [uv](https://docs.astral.sh/uv/)
 - Node.js 20 or later and [pnpm](https://pnpm.io/) 10
 - MySQL 8.4 server binaries on the machine, or Docker if you prefer the compose service
 - Git
@@ -239,54 +243,60 @@ Other useful targets (run `make help` for the full list):
 | `make export-openapi` | Regenerate `docs/api/openapi.json` |
 | `make lint` | Ruff, mypy, ESLint, and TypeScript checks |
 | `make check-docs` | Fail if any Markdown file contains an em dash, en dash, or emoji |
+| `make check-overdue` | Raise `ORDER_OVERDUE` alerts for open orders past their due date; exits 0 after committing and 1 after rolling back on an error |
+| `make benchmark-sim` | Time simulation persistence for the demo shape and a large shape, rolled back |
 
 ## Testing and quality gates
 
-Backend tests run against a real MySQL database (`factory_sherlock_test`) so that constraints, transactions, and the SQL files are exercised as they will run in production. Unit tests cover the pure domain and simulation code without a database.
+Backend tests run against a real MySQL database (`factory_sherlock_test`) so that constraints, transactions, and the SQL files are exercised as they will run in production. Unit tests cover the pure domain, simulation, throttle, body cap, CSV parsing, and error mapping code without a database. Browser tests (Playwright) in `frontend/e2e` drive the real frontend against the real backend and a seeded demo database.
 
 ```bash
 make test-backend
 make test-frontend
+cd frontend && pnpm test:e2e
 ```
 
-Results on the development machine on 2026-11-03 (MySQL 8.4.0, Python 3.13):
+Checks in this checkout on 2026-11-07 (Python 3.13):
 
 | Check | Result |
 |-------|--------|
-| Backend tests (`pytest`) | 100 passed |
-| Backend coverage (`pytest-cov`) | 95 percent of statements |
-| Ruff lint and format | no findings |
-| mypy strict | no issues in 71 source files |
-| Frontend tests (`vitest`) | 39 passed in 13 files |
-| Frontend lint, typecheck, Prettier, build | no findings |
+| Backend tests (`pytest`) | 481 collected (254 unit, 174 API, 53 integration in 13, 16, and 6 files); the suite was not run against MySQL from this checkout. The last recorded coverage figure is in `docs/testing/test-matrix.md` |
+| Ruff lint and format | no findings (122 files formatted) |
+| mypy strict | no issues in 80 source files |
+| Frontend tests (`vitest`) | 118 passed in 25 files |
+| End-to-end tests (Playwright) | 9 tests in 5 spec files (login, roles, investigation, traceability, analytics); not run from this checkout, run by the End-to-End workflow |
 
 What the backend suite covers:
 
 - State machine tables and measurement evaluation (unit).
 - Simulation determinism, fault effects, and machine state cycling (unit).
-- Investigation rules with a fake query runner (unit).
-- Every API module: authentication and role checks, validation errors with field names, duplicate detection (409), legal and illegal transitions, transactional batch creation with rollback, quarantine cascades, investigation creation with evidence, forward and backward traceability, simulation runs (API, against MySQL).
-- CHECK, UNIQUE, ENUM, and foreign key enforcement, and all twelve SQL files against simulated data (integration).
+- Investigation rules with a fake query runner, including the R7 CUSUM arithmetic (unit).
+- Login throttle window and reservation logic, request body caps, CSV parsing rules, and the MySQL error code mapping (unit).
+- Every API module: authentication and role checks, validation errors with field names, duplicate detection (409), legal and illegal transitions, transactional batch creation with rollback, quarantine cascades, investigation creation with evidence, forward and backward traceability, simulation runs, the pagination envelope and its bounds, status filters and status counts, CSV import with row-level errors, the overdue order check, and the login throttle through the endpoint (API, against MySQL).
+- CHECK, UNIQUE, ENUM, and foreign key enforcement, the list-ordering indexes, and all fourteen SQL files against simulated data (integration).
+- Frontend components and hooks with Vitest and Testing Library; the demo workflows end to end with Playwright.
 
-Continuous integration runs the same checks in GitHub Actions with a MySQL service container. The workflows are in `.github/workflows`. They were validated locally for syntax; the first run on GitHub happens on the initial push.
+Continuous integration runs the same checks in GitHub Actions with a MySQL service container. The workflows are in `.github/workflows`. Backend CI, Frontend CI, and Docs Lint ran green on the first push on 2026-11-04 (run ids in `docs/development/development-roadmap.md`); Compose Smoke and End-to-End were added on 2026-11-07 and run on the next push.
 
 ## API overview
 
-All endpoints live under `/api/v1` and return JSON. Errors use one shape: `error`, `message`, `details`, and a `request_id` that is also returned in the `X-Request-ID` header of every response so a user can quote it when reporting a problem.
+All endpoints live under `/api/v1` and return JSON. Errors use one shape: `error`, `message`, `details`, and a `request_id` that is also returned in the `X-Request-ID` header of every response so a user can quote it when reporting a problem. A throttled login returns 429 with `details.retry_after_seconds` and a matching `Retry-After` header; a body over the cap returns 413 with `details.limit_bytes`.
+
+The six list endpoints (`GET /production-orders`, `GET /production-batches`, `GET /inspections`, `GET /investigations`, `GET /machines/{id}/events`, `GET /analytics/alerts`) take `limit` (1 to 500, default 50) and `offset` (at most 1,000,000) and return `{items, total, limit, offset}`. `GET /production-batches` and `GET /investigations` accept a repeatable `status` filter (`status=A&status=B`, any of them) applied before pagination, so `total` reflects the filter; every batch row carries its parent `order_number`.
 
 | Area | Endpoints | Roles |
 |------|-----------|-------|
 | Health | `GET /health` | public |
-| Auth | `POST /auth/login`, `GET /auth/me` | public, any |
-| Catalog | products, specifications, machines, machine status changes, machine events, material lots, defect types | read: any; write: operator or engineer |
-| Production | orders (create, list, update, status change), batches (create, list, complete, quarantine), units | read: any; write: operator or engineer |
-| Quality | record inspections, list inspections, quality summary | read: any; write: operator or engineer |
+| Auth | `POST /auth/login` (throttled), `GET /auth/me` | public, any |
+| Catalog | products, `GET /specifications` (for the control chart picker), machines, machine status changes, paginated machine events, material lots, defect types | read: any; write: operator or engineer |
+| Production | orders (create, paginated list, update, status change, `GET /production-orders/status-counts`), batches (create, paginated list with repeatable `status` and `order_number` on each row, detail, complete, quarantine) | read: any; write: operator or engineer |
+| Quality | record inspections, `POST /inspections/import` (CSV, at most 1 MiB and 5000 rows, all or nothing), paginated inspection list, quality summary | read: any; write: operator or engineer |
 | Traceability | forward trace by lot, backward trace by serial, quarantine lot | read: any; quarantine: engineer |
-| Investigations | open, list, detail with evidence, status change, close with conclusion | read: any; write: engineer |
-| Analytics | query catalogue, run a dashboard query, alerts | any; acknowledge alert: operator or engineer |
+| Investigations | open, paginated list with repeatable `status`, detail with evidence, status change, close with conclusion | read: any; write: engineer |
+| Analytics | query catalogue (14 entries, 8 runnable), run a dashboard query, paginated alerts, acknowledge alert, `POST /analytics/alerts/checks/overdue-orders` (no request body; the server clock is the check date) | any; acknowledge and overdue check: operator or engineer |
 | Simulation | run a scenario and persist its output | engineer |
 
-The full OpenAPI document (31 paths) is exported to [docs/api/openapi.json](docs/api/openapi.json).
+The full OpenAPI document (35 paths, 44 operations) is exported to [docs/api/openapi.json](docs/api/openapi.json).
 
 ## Documentation
 
@@ -296,9 +306,11 @@ The full OpenAPI document (31 paths) is exported to [docs/api/openapi.json](docs
 | Database | [database design](docs/database/database-design.md), [data dictionary](docs/database/data-dictionary.md), [normalization](docs/database/normalization.md), [queries](docs/database/queries.md), [seed data](docs/database/seed-data.md) |
 | Simulation | [simulation design](docs/simulation/simulation-design.md), [fault models](docs/simulation/fault-models.md) |
 | Investigation | [investigation engine](docs/investigation/investigation-engine.md), [traceability design](docs/investigation/traceability-design.md) |
+| Quality | [inspection import](docs/quality/inspection-import.md) (CSV format, limits, error shape, body caps, benchmark) |
+| API | [openapi.json](docs/api/openapi.json), regenerated with `make export-openapi` |
 | Requirements | [functional](docs/requirements/functional-requirements.md), [non-functional](docs/requirements/non-functional-requirements.md), [business rules](docs/requirements/business-rules.md) |
 | Development and testing | [docs/development](docs/development), [docs/testing](docs/testing), [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) |
-| Decisions | [ADR index](docs/decisions/README.md) (eight records) |
+| Decisions | [ADR index](docs/decisions/README.md) (nine records) |
 | Course milestones | [docs/milestones](docs/milestones): Week 8 proposal and the Week 8, 9, and 10 milestone reports as Markdown, DOCX, and PDF |
 | AI evidence | [docs/ai_evidence](docs/ai_evidence): use record, conversation excerpts, reflection notes |
 
@@ -310,30 +322,31 @@ Only genuine captures of the running application are committed. The plan for whi
 
 Implemented and verified by automated tests:
 
-- MySQL schema (17 tables), Alembic migration, generated schema export, reference seed, demo scenario.
-- Twelve analytical SQL files, executed in tests against simulated data.
-- Backend API for all six modules with authentication, roles, validation, typed errors, and transactions.
-- Deterministic simulation engine with five fault models and machine state tracking.
-- Investigation engine with six rules, stored SQL evidence, and a non-causal summary.
+- MySQL schema (17 tables), three Alembic migrations (tables, `alerts.production_order_id`, list-ordering indexes), generated schema export, reference seed, demo scenario.
+- Fourteen analytical SQL files, executed in tests against simulated data.
+- Backend API for all six modules with authentication, roles, login throttling, request body caps, validation, typed errors, pagination, and transactions.
+- CSV inspection import (bulk writes, row-level errors) and the overdue order check (`make check-overdue` and the endpoint).
+- Deterministic simulation engine with five fault models, machine state tracking, and chunked bulk-insert persistence.
+- Investigation engine with seven rules (R7 is a one-sided CUSUM), stored SQL evidence, and a non-causal summary.
 - Forward and backward traceability and quarantine cascades.
-- Frontend application with login, overview, machines, orders, batches, inspections, traceability, investigations with the case board, analytics with the SQL explorer, and simulation pages.
-- CI workflows, contribution and security policies, issue and pull request templates.
-- Documentation set, architecture decision records, rendered diagrams, milestone documents.
+- Frontend application with login, overview (with the overdue check), machines, orders, batches, inspections with the CSV import panel, traceability, investigations with the case board, analytics with the SQL explorer and the per-characteristic control chart, and simulation pages; paged tables on every list screen; an accessibility pass (labelled landmarks and row actions, focus management for disclosures and inline forms, WCAG 2.1 AA contrast in both themes).
+- Five CI workflows, nine Playwright browser tests, contribution and security policies, issue and pull request templates.
+- Documentation set, nine architecture decision records, rendered diagrams, milestone documents.
 
 Planned or not yet done:
 
 - A walkthrough video (see the media plan).
-- Execution of the Docker Compose service (Docker is not installed on the development machine).
+- Observing the Compose Smoke and End-to-End workflows green on GitHub and recording their run ids in `docs/testing/test-matrix.md`.
 - Deployment to any hosted environment; the project is designed to run locally.
 
 ## Roadmap
 
+The items listed in the Week 10 report (pagination, CSV import, overdue order alerts, per-characteristic control charts, a CUSUM onset rule) were implemented on 2026-11-07; the per-item record is in [docs/development/development-roadmap.md](docs/development/development-roadmap.md). Remaining:
+
 1. Record the walkthrough video for the course submission.
-2. Add pagination (limit and cursor) to the list endpoints and matching table paging in the frontend.
-3. Add an inspection import endpoint so measurements from a CSV file can be loaded without the simulator.
-4. Add a scheduled check that opens an alert when an order passes its due date (the `ORDER_OVERDUE` alert type exists in the schema but nothing raises it yet).
-5. Add per-characteristic control charts to the analytics page.
-6. Consider statistical onset detection (for example, cumulative sum) as an additional investigation rule, keeping the rule-based design described in ADR-0005.
+2. Observe the Compose Smoke and End-to-End workflows on the next push and record the outcome in `docs/testing/test-matrix.md`.
+3. Release from quarantine and the `CONSUMED` lot status (Phase 7 gaps in the roadmap document).
+4. Schedule `make check-overdue`; nothing in the repository runs it on a timer.
 
 ## Known limitations
 
@@ -341,14 +354,13 @@ Planned or not yet done:
 - Investigation rules use fixed thresholds (for example, a batch review rate of 10 percent). Thresholds are configurable in code but not through the API.
 - `material_lots.quantity_received` is recorded but never decremented; material consumption is tracked per batch, not as a running balance.
 - Timestamps are stored without a time zone and interpreted as local time of the server.
-- The application has no rate limiting or account lockout; it is intended for local use.
-- List endpoints return whole result sets without pagination. This is adequate for the demo volume (hundreds of rows) and is listed on the roadmap.
-- The simulation persists units and inspections through the ORM, which is fine for runs of a few thousand units; much larger runs would need bulk inserts.
-- `updated_at` columns are maintained by the ORM, not by MySQL, so rows updated through raw SQL do not refresh them.
+- Request limiting covers only `POST /auth/login` and is counted in memory per API process; several uvicorn workers would each keep their own counts. There is no general rate limit on authenticated endpoints and no token revocation.
+- The simulation persists units, inspections, defects, and events with chunked multi-row inserts (1000 rows per statement); orders, batches, and alerts still go through the ORM one object at a time.
+- The overdue order check is idempotent but nothing in the repository schedules it; run `make check-overdue` or call the endpoint.
 
 ## Use of AI tools
 
-This project was built with AI coding assistants under the course's AI-integrated project guidelines. Every substantive use is recorded in [docs/ai_evidence/ai-use-record.md](docs/ai_evidence/ai-use-record.md) with what was proposed, whether it was accepted, revised, or rejected, and how it was verified. Conversation excerpts that show design decisions, bugs caught, and proposals rejected are in [docs/ai_evidence/conversations](docs/ai_evidence/conversations). The student's own reflection is in [reflection-notes.md](docs/ai_evidence/reflection-notes.md). Nothing in this repository presents AI output as verified without a test, a query result, or a review behind it.
+AI assistance (Claude Code) was used under the course's AI-integrated project guidelines. Every substantive use is recorded in [docs/ai_evidence/ai-use-record.md](docs/ai_evidence/ai-use-record.md) with what was proposed, whether it was accepted, revised, or rejected, and how it was verified. Conversation excerpts that show design decisions, bugs caught, and proposals rejected are in [docs/ai_evidence/conversations](docs/ai_evidence/conversations). The student's own reflection is in [reflection-notes.md](docs/ai_evidence/reflection-notes.md). Nothing in this repository presents AI output as verified without a test, a query result, or a review behind it.
 
 ## References
 

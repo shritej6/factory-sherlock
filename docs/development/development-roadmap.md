@@ -30,15 +30,15 @@ Scope: system overview, component design, data flow, repository structure, archi
 
 Present: `docs/architecture/system-overview.md`; this documentation set (`docs/simulation/`, `docs/investigation/`, `docs/requirements/`, `docs/testing/`, `docs/development/`, `docs/media/`, `docs/quality/`).
 
-Also present: `docs/architecture/` (system overview, component design, data flow, repository structure), `docs/decisions/` (ADR-0001 to ADR-0008), `docs/database/`, `docs/milestones/`, and `docs/ai_evidence/`.
+Also present: `docs/architecture/` (system overview, component design, data flow, repository structure), `docs/decisions/` (ADR-0001 to ADR-0009), `docs/database/`, `docs/milestones/`, and `docs/ai_evidence/`.
 
 ## Phase 3: Application foundation
 
 Scope: configuration, database engine and session management, structured logging, typed errors and HTTP mapping, password hashing and JWT, role dependencies, health check, ORM models, Alembic migration, seed command.
 
-Present: `backend/app/core/` (clock, config, database, logging, exceptions, security, throttle), `backend/app/api/` (deps with the `Paging` dependency, errors, router, health, auth), `backend/app/models/` (seven aggregates, enums, timestamp mixin), `backend/migrations/` with two migrations (`3a5e982c3679` creates the 17 tables; `383273c26ef7` adds `alerts.production_order_id`), `backend/app/seed.py` with `database/seeds/01_reference_data.sql`, `database/schema/schema.sql` snapshot, `docs/api/openapi.json`.
+Present: `backend/app/core/` (clock, config, database, logging, exceptions, security, throttle), `backend/app/api/` (deps with the `Paging` dependency, errors, router, health, auth), `backend/app/models/` (seven aggregates, enums, timestamp mixin), `backend/migrations/` with three migrations (`3a5e982c3679` creates the 17 tables; `383273c26ef7` adds `alerts.production_order_id`; `6c1f0d2a9b47` adds the list-ordering indexes), `backend/app/seed.py` with `database/seeds/01_reference_data.sql`, `database/schema/schema.sql` snapshot, `docs/api/openapi.json`.
 
-Status: complete. Login is throttled per username and client address (`core/throttle.py`, NFR-1.11). Known limits are recorded in `docs/requirements/non-functional-requirements.md` (no request id on successful requests, no rate limit on authenticated endpoints, no token revocation).
+Status: complete. Login is throttled per account before the password is verified, and per client address only for attempts that already failed (`core/throttle.py`, NFR-1.11); request bodies are capped before authentication (`api/body_limit.py`, 64 KiB, 1 MiB + 64 KiB for the CSV import). Known limits are recorded in `docs/requirements/non-functional-requirements.md` (no request id on successful requests, no rate limit on authenticated endpoints, no token revocation).
 
 ## Phase 4: Manufacturing management
 
@@ -46,7 +46,7 @@ Scope: products and specifications, machines and status changes with events, mat
 
 Present: `catalog_service.py`, `production_service.py`, routes `catalog.py` and `production.py`, state machines for machines, orders, and batches in `domain/state_machines.py`, schemas in `schemas/catalog.py` and `schemas/production.py`.
 
-Status: complete. Order and batch lists are paginated (`GET /production-orders`, `GET /production-batches`: `limit` 1 to 500, default 50, `offset`, response `{items, total, limit, offset}`; `repositories/pagination.py`). `ORDER_OVERDUE` alerts are raised by the on-demand check in `services/alert_service.py` (`POST /analytics/alerts/checks/overdue-orders`, `make check-overdue`; BR-100 to BR-104). Not in scope and not implemented: deleting any entity through the API.
+Status: complete. Order and batch lists are paginated (`GET /production-orders`, `GET /production-batches`: `limit` 1 to 500, default 50, `offset`, response `{items, total, limit, offset}`; `repositories/pagination.py`). `GET /production-batches` takes a repeatable `status` filter applied before pagination and returns `order_number` on every row; `GET /production-orders/status-counts` returns one count per order status from a single `GROUP BY`. `ORDER_OVERDUE` alerts are raised by the on-demand check in `services/alert_service.py` (`POST /analytics/alerts/checks/overdue-orders`, `make check-overdue`; BR-100 to BR-104). Not in scope and not implemented: deleting any entity through the API.
 
 ## Phase 5: Virtual factory
 
@@ -78,13 +78,13 @@ Scope: React, TypeScript, Vite, Tailwind, Recharts single-page application with 
 
 Present (backend): analytics endpoints for the query catalogue (`QueryCatalogEntry`, 14 entries, 8 runnable), parameterised query execution (`QueryResult`, including query 10 `characteristic_control_chart` with `specification_id`), `GET /specifications` for the control chart picker, paginated alerts, acknowledgement (Operator guard), and the overdue order check. Present (frontend): React 19, TypeScript, Vite 7, Tailwind 4, React Router 7, TanStack Query 5, and Recharts 3 with a screen for each of Login, Overview, Machines, Orders, Batches, Inspections (with the CSV import panel), Traceability, Investigations list, Investigation detail (case board with evidence cards and show-the-SQL), Analytics (charts, the per-characteristic control chart, and the SQL explorer), and Simulation, under `frontend/src/features/*`, with shared UI and chart components, hooks, services, types, and utilities; the list screens read the page envelope of the paginated endpoints.
 
-Status: complete. `pnpm test` ran 18 files and 76 tests, all passing, on 2026-11-07 in this checkout; `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, and `pnpm build` passed in the last recorded run. Nine screenshots of the running screens were captured on 2026-11-03 (docs/media/screenshots).
+Status: complete. `pnpm test` ran 25 files and 118 tests, all passing, on 2026-11-07 in this checkout; `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, and `pnpm build` passed in the last recorded run (commit 897fb3e, 2026-11-07). An accessibility pass on 2026-11-07 (commit f62170c) covered focus management, landmark and heading structure, accessible names for repeated row actions, and contrast. Nine screenshots of the running screens were captured on 2026-11-03 (docs/media/screenshots).
 
 ## Phase 9: Validation
 
 Scope: automated tests (unit, API, database integration, simulation, business rule, investigation, end-to-end), the twelve required scenarios, test matrix with recorded results, continuous integration, screenshots and demonstration videos, final review of documentation against code.
 
-Present: backend tests under `backend/tests/{unit,api,integration}/` (199 tests collected on 2026-11-07, including `test_pagination_api.py`, `test_inspection_csv.py`, `test_inspection_import.py`, `test_alert_rules.py`, `test_alert_checks_api.py`, `test_alert_order_link.py`, `test_login_throttle.py`, and `test_login_throttle_api.py`; the last recorded full run with results, on 2026-11-03, reported 100 passed with 95 percent coverage of `app` before these modules existed), frontend tests colocated under `frontend/src` with `frontend/tests/setup.ts` (`pnpm test`: 18 files, 76 tests passed on 2026-11-07), end-to-end browser tests under `frontend/e2e` (Playwright Test, five spec files: login, roles, investigation, traceability, analytics; `pnpm test:e2e` starts the backend on port 8013 and Vite on port 5183), the five CI workflows in `.github/workflows/`, `docs/testing/testing-strategy.md`, `docs/testing/test-matrix.md` (results recorded where an automated test covers the scenario), `docs/media/media-plan.md` (nine screenshots captured; the walkthrough video is in progress).
+Present: backend tests under `backend/tests/{unit,api,integration}/` (481 tests collected on 2026-11-07 in 13 unit, 16 API, and 6 integration files, including `test_pagination_api.py`, `test_inspection_csv.py`, `test_inspection_import.py`, `test_body_limit.py`, `test_body_limit_api.py`, `test_alert_rules.py`, `test_alert_checks_api.py`, `test_alert_order_link.py`, `test_login_throttle.py`, `test_login_throttle_api.py`, `test_error_mapping.py`, `test_status_filters_api.py`, and `test_list_ordering_indexes.py`; the suite was not run against MySQL from this checkout, and the last recorded run with results is in `docs/testing/test-matrix.md`), frontend tests colocated under `frontend/src` with `frontend/tests/setup.ts` (`pnpm test`: 25 files, 118 tests passed on 2026-11-07), end-to-end browser tests under `frontend/e2e` (Playwright Test, five spec files and nine tests: login, roles, investigation, traceability, analytics; `pnpm test:e2e` starts the backend on port 8013 and Vite on port 5183), the five CI workflows in `.github/workflows/`, `docs/testing/testing-strategy.md`, `docs/testing/test-matrix.md` (results recorded where an automated test covers the scenario), `docs/media/media-plan.md` (nine screenshots captured; the walkthrough video is in progress).
 
 Gaps: the full backend suite, the Compose Smoke workflow, and the End-to-End workflow have not been observed green from this checkout since the 2026-11-07 changes, and no run ids for them are recorded here; the matrix rows marked as not covered by an automated test remain; the walkthrough video is being produced.
 
@@ -102,7 +102,15 @@ Status: in progress. Next steps in order: observe the five workflows on the next
 | Login throttle | Implemented | `core/throttle.py`; NFR-1.11, `SECURITY.md` |
 | Bulk-insert simulation persistence | Implemented | `simulation_service._bulk_insert`; figures in `docs/simulation/simulation-design.md` |
 | End-to-end tests and Compose Smoke in CI | Implemented | `frontend/e2e`, `.github/workflows/e2e.yml`, `.github/workflows/compose-smoke.yml` |
-| Walkthrough video | In progress | `docs/media/media-plan.md` |
+| Login throttle redesign (account lockout before verification, address rule only after a failure, username normalisation, pending reservation) | Implemented | `core/throttle.py`; `tests/unit/test_login_throttle.py` (16 tests), `tests/api/test_login_throttle_api.py` (10 tests) |
+| Bulk CSV import write path | Implemented | `services/inspection_import.py::_write_inspections`; `scripts/development/benchmark_inspection_import.py`; figures in `docs/quality/inspection-import.md` |
+| Request body caps (413 before authentication) | Implemented | `api/body_limit.py`; `tests/unit/test_body_limit.py`, `tests/api/test_body_limit_api.py` |
+| Per-subgroup control limits | Implemented | `database/queries/10_characteristic_control_chart.sql`; `frontend/src/utils/chartTransforms.ts` reads `ucl` and `lcl` per row |
+| List-ordering indexes | Implemented | migration `6c1f0d2a9b47`; `tests/integration/test_list_ordering_indexes.py`; EXPLAIN notes in `docs/database/database-design.md` section 6 |
+| Status filters and order status counts | Implemented | `GET /production-batches?status=`, `GET /investigations?status=`, `GET /production-orders/status-counts`, `order_number` on batch rows; `tests/api/test_status_filters_api.py` |
+| Overdue check without a client-supplied date | Implemented | `routes/analytics.py::check_overdue_orders` (no body), locking reads in `alert_service.py`, exit 1 on error in `jobs/check_overdue_orders.py`; `tests/api/test_alert_checks_api.py` |
+| Frontend accessibility pass | Implemented | commit f62170c: `components/ui/States.tsx` (`ErrorNotice`), `Disclosure.tsx`, `app/Sidebar.tsx`, `charts/ChartFrame.tsx`, `features/batches/BatchActions.tsx` |
+| Walkthrough video | In progress | `docs/media/media-plan.md`; `docs/media/videos/` holds no video file |
 
 ## Dependencies between remaining work
 
