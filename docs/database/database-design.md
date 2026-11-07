@@ -1,6 +1,6 @@
 # Factory Sherlock database design
 
-This document describes the MySQL schema behind Factory Sherlock: the tables, their keys and constraints, the indexes and the queries they serve, the business rules that live in the database versus the application, and the transaction boundaries. Every statement here is derived from the ORM models in `backend/app/models/`, the Alembic migration in `backend/migrations/versions/`, and the generated snapshot in `database/schema/schema.sql`.
+This document describes the MySQL schema behind Factory Sherlock: the tables, their keys and constraints, the indexes and the queries they serve, the business rules that live in the database versus the application, and the transaction boundaries. Every statement here is derived from the ORM models in `backend/app/models/`, the Alembic migrations in `backend/migrations/versions/`, and the generated snapshot in `database/schema/schema.sql`.
 
 Related documents:
 
@@ -8,7 +8,7 @@ Related documents:
 |----------|----------|
 | [data-dictionary.md](data-dictionary.md) | Column-level reference with exact MySQL types |
 | [normalization.md](normalization.md) | Functional dependencies and normal-form analysis |
-| [queries.md](queries.md) | The twelve documented SQL queries with real results |
+| [queries.md](queries.md) | The fourteen documented SQL files with real results |
 | [seed-data.md](seed-data.md) | Reference data and demo scenario contents |
 | `docs/media/diagrams/er-diagram.mmd` | Mermaid source of the ER diagram below |
 | `docs/architecture/` | Application architecture (owned separately; not repeated here) |
@@ -19,7 +19,7 @@ Related documents:
 2. **Quality data that supports investigation, not just reporting.** Inspections are stored per unit per specification with a timestamp, so the investigation engine can ask time-based questions (defect rate per hour, rate before and after a machine event) with plain SQL.
 3. **Integrity enforced where it is cheapest to enforce.** Value domains (ENUM), uniqueness, referential integrity, and arithmetic invariants (CHECK) are enforced by MySQL, so rows inserted outside the application are held to the same rules. Workflow rules (state transitions, quantity availability) are enforced in services where a clear error message can be produced.
 4. **Explainable findings.** Every evidence card stores the SQL text that produced it and the rows it returned, so a reviewer can rerun or audit a finding later.
-5. **Deterministic reproducibility.** The schema is created by one Alembic migration, seeded by one idempotent SQL file plus one Python command, and the demo scenario is a seeded simulation, so any grader can rebuild the identical database.
+5. **Deterministic reproducibility.** The schema is created by two Alembic migrations (`3a5e982c3679`, the initial 17 tables; `383273c26ef7`, which adds `alerts.production_order_id`), seeded by one idempotent SQL file plus one Python command, and the demo scenario is a seeded simulation, so any grader can rebuild the identical database.
 
 ## 2. Entity-relationship diagram
 
@@ -370,7 +370,7 @@ The role column is a MySQL ENUM (`ADMIN`, `ENGINEER`, `OPERATOR`, `VIEWER`). Aut
 | Foreign keys | `unit_id` to `production_units.id` ON DELETE RESTRICT (an inspection is a recorded measurement and must not disappear with its unit); `specification_id` to `product_specifications.id` ON DELETE RESTRICT (a specification that has been used to judge units cannot be removed, which protects the meaning of stored results). |
 | Unique | `uq_inspection_unit_spec (unit_id, specification_id)`: one inspection per unit per characteristic. `quality_service.record_inspection` turns a violation into a 409 through `_flush_or_conflict`. |
 | Check | none |
-| Indexes | `PRIMARY`; `uq_inspection_unit_spec` (also the FK index on `unit_id`; used by every unit-to-inspection join); `ix_inspections_time_result (inspected_at, result)` serves the time-window filter of query 01 when the window is selective (EXPLAIN shows a range scan on it for a one-hour window, and a walk from batches when the whole table lies inside the window) and `list_inspections` ordering by `inspected_at DESC`; queries 03, 06, and `defect_onset` list it in `possible_keys` but reach inspections through `uq_inspection_unit_spec` or the primary key instead; implicit FK index `specification_id`. |
+| Indexes | `PRIMARY`; `uq_inspection_unit_spec` (also the FK index on `unit_id`; used by every unit-to-inspection join); `ix_inspections_time_result (inspected_at, result)` serves the time-window filter of query 01 when the window is selective (EXPLAIN shows a range scan on it for a one-hour window, and a walk from batches when the whole table lies inside the window) and `list_inspections` ordering by `inspected_at DESC`; queries 03, 06, and `defect_onset` list it in `possible_keys` but reach inspections through `uq_inspection_unit_spec` or the primary key instead; implicit FK index `specification_id`, which query 10 (`characteristic_control_chart`) reads by `ref` at demo volume (section 6). |
 
 The result is stored rather than recomputed from the specification so that historical results remain stable if a tolerance is later edited; see [normalization.md](normalization.md) for why this is a deliberate snapshot.
 
@@ -484,7 +484,7 @@ In one transaction: validate the order status and machine, compute the remaining
 
 ### Simulation persistence (`simulation_service.persist`)
 
-The engine produces plain dataclasses with no database access. `persist` then writes, in the request transaction (or the seed command's transaction): all `production_orders` (flushed first so their ids exist), then for each batch the `production_batches` row (flushed to obtain its id), its `batch_materials`, `production_units`, `inspections`, and `inspection_defects`, and the running `quantity_completed` on the order (an `UPDATE ... SET quantity_completed = quantity_completed + n` followed by a refresh of the ORM object); then `machine_events` (state changes and fault events), `alerts`, and finally each machine's final `status`. A demo run touches ten tables and several thousand rows; a failure anywhere discards all of them.
+The engine produces plain dataclasses with no database access. `persist` then writes, in the request transaction (or the seed command's transaction): all `production_orders` through the ORM, flushed once so their ids exist; all `production_batches` with their `batch_materials` through the ORM, flushed once so the batch ids exist, after which `_complete_orders` sets each order's `quantity_completed` and marks it COMPLETED when the planned quantity is reached; then `production_units`, `inspections`, `inspection_defects`, and `machine_events` as chunked multi-row `INSERT` statements of at most 1000 rows (`_bulk_insert`, `session.execute(insert(Model), rows)`). MySQL returns no generated ids for a multi-row insert, so unit ids are selected back by `serial_number` and inspection ids by `(unit_id, specification_id)` before the dependent rows are built. Finally the `alerts` rows and each machine's final `status` are written through the ORM and flushed. A demo run touches ten tables and several thousand rows; a failure anywhere discards all of them (`tests/integration/test_transactions.py` fails the last bulk insert and asserts that nothing remains). Timings are in `docs/simulation/simulation-design.md`.
 
 ### Lot quarantine cascade (`traceability_service.quarantine_lot`)
 
@@ -510,6 +510,7 @@ The lot's status is set to `QUARANTINED`, every batch that consumed it (found th
 | `ix_production_batches_machine_time` | Reach a machine's batches, optionally in a time range, without scanning all batches |
 | `ix_production_batches_order` | Batches per order for the performance query and the quantity checks |
 | `ix_inspections_time_result` | Time-window filters on inspections and ordering by inspection time |
+| Implicit FK index `specification_id` on `inspections` | Query 10 (`characteristic_control_chart`) reads inspections by `ref` on this index at demo volume, where the window covers most of the table (240 rows, time filter as `Using where`); with a ten-minute window the optimizer switches to a `range` scan on `ix_inspections_time_result` and applies the specification filter as `Using where` (EXPLAIN in [queries.md](queries.md)) |
 | `ix_production_orders_status` | Order lists filtered by status |
 | `ix_production_units_produced_at` | Time-window filter of query 09 (`produced_at` leading, `batch_id` second so the batch join reads from the index) |
 | `ix_alerts_created` | `ORDER BY created_at DESC, id DESC` in `recent_alerts` |
@@ -524,6 +525,7 @@ The lot's status is set to `QUARANTINED`, every batch that consumed it (found th
 | When the whole table lies inside the requested window, the optimizer walks from batches (queries 01, 09, `defect_onset`) or from the junction table (query 03) and applies the time filter as `Using where` instead of using `ix_inspections_time_result` or `ix_production_units_produced_at` | `EXPLAIN` output in [queries.md](queries.md); with a one-hour window the same statements switch to range scans on those indexes | Expected: the indexes pay off when the window is small relative to history, which is the production case |
 | The lateral blocks of query 06 cannot range-scan `ix_production_batches_machine_time` on `started_at` because the bounds come from the outer event row | `EXPLAIN` shows `ref` on the `machine_id` prefix with `Using where; Using index` | The covering index still filters batches before units and inspections are joined; a constant-bound rewrite would need one statement per event |
 | `investigations.created_at` is used for `ORDER BY ... DESC` without an index | `list_investigations` | Add an index if the list grows beyond a few thousand rows |
+| Query 10 has no composite index on `(specification_id, inspected_at)`, so one of its two predicates is always applied as `Using where` | `EXPLAIN` on query 10 in [queries.md](queries.md): `ref` on the `specification_id` index for wide windows, `range` on `ix_inspections_time_result` for narrow ones | Acceptable at demo volume; add `(specification_id, inspected_at)` if control charts over long histories become slow |
 
 ## 7. How the ORM maps to MySQL and why SQL still matters
 
@@ -571,11 +573,11 @@ ORM-level defaults (`default=...`) such as `UserRole.VIEWER`, `MachineStatus.IDL
 
 | Feature | Entry point | SQL files |
 |---------|-------------|-----------|
-| Analytics dashboard and SQL explorer (`GET /analytics/queries`, `GET /analytics/queries/{name}`) | `analytics_service.run_dashboard_query`, `DASHBOARD_QUERIES` | 01, 02, 03, 06, 07, 08, 09 |
+| Analytics dashboard and SQL explorer (`GET /analytics/queries`, `GET /analytics/queries/{name}`) | `analytics_service.run_dashboard_query`, `DASHBOARD_QUERIES` | 01, 02, 03, 06, 07, 08, 09, 10 |
 | Forward and backward traceability (`GET /traceability/forward/{lot}`, `GET /traceability/backward/{serial}`) | `traceability_service` | 04, 05 |
-| Investigation rules R1 to R6 | `app/investigation/rules.py` through `SqlQueryRunner` | 01, 03, 08, `investigation/defect_onset`, `investigation/machine_events_before_onset`, `investigation/shared_material_lots` |
+| Investigation rules R1 to R7 | `app/investigation/rules.py` through `SqlQueryRunner` | 01, 03, 08, `investigation/defect_onset`, `investigation/machine_events_before_onset`, `investigation/shared_material_lots`, `investigation/hourly_defect_rates` |
 
-These queries use window functions (`RANK`, `DENSE_RANK`, `LAG`, `SUM ... OVER`), `JOIN LATERAL`, `GROUP BY ... WITH ROLLUP` with `GROUPING()`, `GROUP_CONCAT`, correlated `EXISTS`, and conditional aggregation. The ORM query builder can express some of these, but the resulting Python is harder to read than the SQL and the generated text is not what a reviewer sees. More importantly, `investigation_evidence.query_sql` stores the exact text that ran, and the SQL explorer returns the same text, so the SQL on disk, the SQL executed, and the SQL shown to users are one artifact.
+These queries use window functions (`RANK`, `DENSE_RANK`, `LAG`, `SUM ... OVER`, `AVG ... OVER ()` with `STDDEV_SAMP` in query 10), `JOIN LATERAL`, `GROUP BY ... WITH ROLLUP` with `GROUPING()`, `GROUP_CONCAT`, correlated `EXISTS`, and conditional aggregation. The ORM query builder can express some of these, but the resulting Python is harder to read than the SQL and the generated text is not what a reviewer sees. More importantly, `investigation_evidence.query_sql` stores the exact text that ran, and the SQL explorer returns the same text, so the SQL on disk, the SQL executed, and the SQL shown to users are one artifact.
 
 `app/repositories/sql_loader.py` reads `database/queries/**/*.sql` once, strips the numeric prefix from file names, and keys subdirectory files with a dotted prefix (`investigation.defect_onset`). `load_query` wraps the text in `sqlalchemy.text()` and, for `shared_material_lots`, declares `batch_ids` as an expanding bind parameter so a Python list renders as `IN (?, ?, ...)`. `SqlQueryRunner.run` executes the clause with a parameter dictionary and converts `Decimal`, `datetime`, and `bytes` into JSON-friendly values. Parameters are always bound, never interpolated, so the raw SQL path is as safe from injection as the ORM path.
 
