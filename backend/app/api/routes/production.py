@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import CurrentUser, DbSession, Engineer, Operator, Paging
-from app.models.enums import OrderStatus
+from app.models.enums import BatchStatus, OrderStatus
 from app.schemas.common import Page
 from app.schemas.production import (
+    OrderStatusCounts,
     ProductionBatchCreate,
     ProductionBatchRead,
     ProductionOrderCreate,
@@ -37,6 +38,13 @@ def create_order(
     return ProductionOrderRead.model_validate(production_service.create_order(session, body))
 
 
+# Declared before the ``{order_id}`` route so "status-counts" is not parsed as an id.
+@router.get("/production-orders/status-counts", response_model=OrderStatusCounts)
+def order_status_counts(session: DbSession, _: CurrentUser) -> OrderStatusCounts:
+    counts = production_service.count_orders_by_status(session)
+    return OrderStatusCounts.model_validate({status.value: n for status, n in counts.items()})
+
+
 @router.get("/production-orders/{order_id}", response_model=ProductionOrderRead)
 def get_order(session: DbSession, _: CurrentUser, order_id: int) -> ProductionOrderRead:
     return ProductionOrderRead.model_validate(production_service.get_order(session, order_id))
@@ -65,9 +73,10 @@ def list_batches(
     paging: Paging,
     order_id: int | None = Query(None, gt=0),
     machine_id: int | None = Query(None, gt=0),
+    status_filter: list[BatchStatus] | None = Query(None, alias="status"),
 ) -> Page[ProductionBatchRead]:
     result = production_service.list_batches(
-        session, paging, order_id=order_id, machine_id=machine_id
+        session, paging, order_id=order_id, machine_id=machine_id, statuses=status_filter
     )
     return Page[ProductionBatchRead].from_result(result, paging, ProductionBatchRead.model_validate)
 

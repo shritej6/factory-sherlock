@@ -1,6 +1,7 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from app.api.deps import CurrentUser, DbSession, Engineer, Paging
+from app.models.enums import InvestigationStatus
 from app.schemas.common import Page
 from app.schemas.investigation import (
     InvestigationCreate,
@@ -14,9 +15,12 @@ router = APIRouter(prefix="/investigations", tags=["investigations"])
 
 @router.get("", response_model=Page[InvestigationRead])
 def list_investigations(
-    session: DbSession, _: CurrentUser, paging: Paging
+    session: DbSession,
+    _: CurrentUser,
+    paging: Paging,
+    status_filter: list[InvestigationStatus] | None = Query(None, alias="status"),
 ) -> Page[InvestigationRead]:
-    result = investigation_service.list_investigations(session, paging)
+    result = investigation_service.list_investigations(session, paging, statuses=status_filter)
     return Page[InvestigationRead].from_result(result, paging, InvestigationRead.model_validate)
 
 

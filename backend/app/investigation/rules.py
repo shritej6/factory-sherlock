@@ -276,12 +276,18 @@ def _cusum_rows(
     return out, p0
 
 
-def _hours_apart(later: datetime, earlier: datetime) -> str:
+def hours_apart(later: datetime, earlier: datetime, *, after: str, before: str) -> str | None:
+    """Whole hours from ``earlier`` to ``later`` as "N hour(s) <after|before>".
+
+    Returns ``None`` when both times fall within the same hour, so callers can
+    phrase that case in their own words. Shared by the CUSUM narrative and the
+    written summary so the two never disagree on the distance.
+    """
     hours = int((later - earlier).total_seconds() // 3600)
     if hours == 0:
-        return "the same hour as"
+        return None
     unit = "hour" if abs(hours) == 1 else "hours"
-    return f"{abs(hours)} {unit} {'after' if hours > 0 else 'before'}"
+    return f"{abs(hours)} {unit} {after if hours > 0 else before}"
 
 
 def _cusum_narrative(ctx: InvestigationContext, rows: list[dict[str, Any]], p0: float) -> str:
@@ -305,12 +311,14 @@ def _cusum_narrative(ctx: InvestigationContext, rows: list[dict[str, Any]], p0: 
             f"sustained shift away from the reference rate was detected.{tail}"
         )
     signal_time = datetime.fromisoformat(first["bucket_start"])
-    when = (
-        f"{_hours_apart(signal_time, ctx.onset_time)} the first hour at or above {review} "
-        f"found by R3 ({ctx.onset_time:%H:%M})"
-        if ctx.onset_time
-        else f"while R3 found no single hour at or above {review}"
-    )
+    if ctx.onset_time:
+        offset = hours_apart(signal_time, ctx.onset_time, after="after", before="before")
+        when = (
+            f"{offset or 'the same hour as'} the first hour at or above {review} "
+            f"found by R3 ({ctx.onset_time:%H:%M})"
+        )
+    else:
+        when = f"while R3 found no single hour at or above {review}"
     return (
         f"{setup} The statistic first reached {first['cusum']:.4f} in the hour starting "
         f"{first['bucket_start']}, {when}. A CUSUM signal marks a sustained shift relative "

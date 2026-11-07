@@ -1,5 +1,7 @@
 """Offset pagination contract shared by the growth-table list endpoints."""
 
+from typing import Any
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -21,7 +23,9 @@ def _create_orders(client: TestClient, headers: dict[str, str], ids: Ids, count:
     return created
 
 
-def _page(client: TestClient, headers: dict[str, str], url: str, **params: object) -> dict:  # type: ignore[type-arg]
+def _page(
+    client: TestClient, headers: dict[str, str], url: str, **params: object
+) -> dict[str, Any]:
     response = client.get(url, params=params, headers=headers)
     assert response.status_code == 200, response.text
     return response.json()

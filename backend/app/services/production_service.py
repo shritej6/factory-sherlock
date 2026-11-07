@@ -1,5 +1,7 @@
 """Production orders and batches: the manufacturing execution workflow."""
 
+from collections.abc import Sequence
+
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, selectinload
 
@@ -40,6 +42,16 @@ def list_orders(
     if status is not None:
         stmt = stmt.where(ProductionOrder.status == status)
     return paginate(session, stmt, paging)
+
+
+def count_orders_by_status(session: Session) -> dict[OrderStatus, int]:
+    """One GROUP BY over the orders table; every status is present, zero when absent."""
+    rows = session.execute(
+        select(ProductionOrder.status, func.count()).group_by(ProductionOrder.status)
+    ).all()
+    counts = dict.fromkeys(OrderStatus, 0)
+    counts.update({OrderStatus(status): count for status, count in rows})
+    return counts
 
 
 def get_order(session: Session, order_id: int) -> ProductionOrder:
@@ -95,29 +107,38 @@ def change_order_status(session: Session, order_id: int, target: OrderStatus) ->
 # Batches
 
 
+# The parent order is loaded alongside the batch so ``ProductionBatchRead.order_number``
+# never triggers one query per row.
+_BATCH_LOAD = (
+    selectinload(ProductionBatch.material_links),
+    selectinload(ProductionBatch.order),
+)
+
+
 def list_batches(
     session: Session,
     paging: PageParams,
     *,
     order_id: int | None = None,
     machine_id: int | None = None,
+    statuses: Sequence[BatchStatus] | None = None,
 ) -> PageResult[ProductionBatch]:
     stmt = (
         select(ProductionBatch)
-        .options(selectinload(ProductionBatch.material_links))
+        .options(*_BATCH_LOAD)
         .order_by(ProductionBatch.started_at.desc(), ProductionBatch.id.desc())
     )
     if order_id is not None:
         stmt = stmt.where(ProductionBatch.production_order_id == order_id)
     if machine_id is not None:
         stmt = stmt.where(ProductionBatch.machine_id == machine_id)
+    if statuses:
+        stmt = stmt.where(ProductionBatch.status.in_(statuses))
     return paginate(session, stmt, paging)
 
 
 def get_batch(session: Session, batch_id: int) -> ProductionBatch:
-    batch = session.get(
-        ProductionBatch, batch_id, options=[selectinload(ProductionBatch.material_links)]
-    )
+    batch = session.get(ProductionBatch, batch_id, options=list(_BATCH_LOAD))
     if batch is None:
         raise NotFoundError(f"Production batch {batch_id} not found")
     return batch

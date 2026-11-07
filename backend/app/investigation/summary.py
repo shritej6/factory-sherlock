@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from app.investigation.rules import InvestigationContext
+from app.investigation.rules import InvestigationContext, hours_apart
 
 
 def _pct(value: float | None) -> str:
@@ -11,13 +11,11 @@ def _pct(value: float | None) -> str:
 
 def _onset_agreement(threshold_onset: datetime, cusum_onset: datetime) -> str:
     """One neutral sentence on whether the two onset estimates coincide."""
-    hours = int((cusum_onset - threshold_onset).total_seconds() // 3600)
-    if hours == 0:
+    offset = hours_apart(cusum_onset, threshold_onset, after="later", before="earlier")
+    if offset is None:
         return "The CUSUM onset estimate falls in the same hour."
-    unit = "hour" if abs(hours) == 1 else "hours"
-    direction = "later" if hours > 0 else "earlier"
     return (
-        f"The CUSUM onset estimate ({cusum_onset:%H:%M}) is {abs(hours)} {unit} {direction} "
+        f"The CUSUM onset estimate ({cusum_onset:%H:%M}) is {offset} "
         "than the threshold-based onset."
     )
 
