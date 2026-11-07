@@ -1,19 +1,24 @@
 import { Link } from 'react-router';
 
+import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PageBody, Pagination } from '@/components/ui/Pagination';
 import { Panel } from '@/components/ui/Panel';
 import { StatTile } from '@/components/ui/StatTile';
-import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
+import { EmptyState, ErrorState, InlineNotice, LoadingState } from '@/components/ui/States';
 import {
   LOOKUP_PAGE,
   useAlerts,
+  useCheckOverdueOrders,
   useInvestigations,
   useMachines,
   useOrderCounts,
   useQualitySummary,
 } from '@/hooks/queries';
+import { useAuth } from '@/hooks/useAuth';
 import { usePageState } from '@/hooks/usePageState';
+import type { OverdueCheckResponse } from '@/types/api';
+import { describeError } from '@/utils/errors';
 import { formatNumber, formatPercent } from '@/utils/format';
 
 import { AlertsList } from './AlertsList';
@@ -26,12 +31,24 @@ import { MachineStatusCard } from './MachineStatusCard';
 const ALERT_PAGE_SIZE = 10;
 const ALERT_PAGE_SIZES: readonly number[] = [10, 25, 50];
 
+const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+/** One sentence for the notice shown after the overdue order check completes. */
+function describeOverdueCheck({ checked, raised }: OverdueCheckResponse): string {
+  const orders = `Checked ${plural(checked, 'open order')}`;
+  return raised === 0
+    ? `${orders}, no new overdue alerts`
+    : `${orders}, raised ${plural(raised, 'overdue alert')}`;
+}
+
 export function OverviewPage() {
+  const { can } = useAuth();
   const machines = useMachines();
   const summary = useQualitySummary();
   const orderCounts = useOrderCounts(['RELEASED', 'IN_PROGRESS']);
   const { page: alertPage, setPage: setAlertPage } = usePageState(ALERT_PAGE_SIZE);
   const alerts = useAlerts(alertPage);
+  const overdueCheck = useCheckOverdueOrders();
   const investigations = useInvestigations(LOOKUP_PAGE);
 
   const activeOrders = orderCounts.data
@@ -104,11 +121,34 @@ export function OverviewPage() {
           title="Recent alerts"
           className="xl:col-span-2"
           actions={
-            <Link to="/analytics" className="text-xs text-accent hover:underline">
-              Analytics
-            </Link>
+            <>
+              {can('alert.acknowledge') && (
+                <Button
+                  size="sm"
+                  busy={overdueCheck.isPending}
+                  onClick={() => overdueCheck.mutate()}
+                >
+                  Check overdue orders
+                </Button>
+              )}
+              <Link to="/analytics" className="text-xs text-accent hover:underline">
+                Analytics
+              </Link>
+            </>
           }
         >
+          {(overdueCheck.isSuccess || overdueCheck.isError) && (
+            <div className="mb-3">
+              {overdueCheck.isSuccess && (
+                <InlineNotice tone="success">
+                  {describeOverdueCheck(overdueCheck.data)}
+                </InlineNotice>
+              )}
+              {overdueCheck.isError && (
+                <InlineNotice tone="error">{describeError(overdueCheck.error)}</InlineNotice>
+              )}
+            </div>
+          )}
           {alerts.isPending && <LoadingState label="Loading alerts" />}
           {alerts.isError && (
             <ErrorState error={alerts.error} onRetry={() => void alerts.refetch()} />
