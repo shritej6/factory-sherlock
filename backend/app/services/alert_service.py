@@ -1,9 +1,13 @@
 """Alert checks that run on demand rather than inside another workflow.
 
-Today there is one: the overdue order check. It is idempotent per open alert,
-so a scheduler can call it as often as it likes; an order gets a second
-ORDER_OVERDUE alert only after the first one has been acknowledged and the
-order is still not finished.
+Today there is one: the overdue order check. Its guarantee is one open
+ORDER_OVERDUE alert per order: a scheduler can call it as often as it likes,
+and an order gets a second alert only after the first one has been
+acknowledged and the order is still not finished.
+
+Concurrent checks are serialised on the overdue order rows (``SELECT ... FOR
+UPDATE``), so two checks that overlap cannot both raise an alert for the same
+order; MySQL has no partial unique index that could enforce this in the schema.
 """
 
 from dataclasses import dataclass
@@ -59,6 +63,11 @@ def _naive(moment: datetime) -> datetime:
 
 
 def overdue_orders(session: Session, *, as_of: datetime) -> list[ProductionOrder]:
+    """Open orders past their due date, locked until the caller's transaction ends.
+
+    The row locks make a second check that runs at the same time wait here
+    until the first one has committed its alerts, so it then sees them.
+    """
     stmt = (
         select(ProductionOrder)
         .where(
@@ -66,17 +75,28 @@ def overdue_orders(session: Session, *, as_of: datetime) -> list[ProductionOrder
             ProductionOrder.status.in_(OPEN_ORDER_STATES),
         )
         .order_by(ProductionOrder.due_date, ProductionOrder.id)
+        .with_for_update()
     )
     return list(session.scalars(stmt))
 
 
 def _orders_with_open_alert(session: Session, order_ids: list[int]) -> set[int]:
+    """Orders that already have an unacknowledged ORDER_OVERDUE alert.
+
+    This is a locking read as well: under REPEATABLE READ a plain SELECT would
+    use the snapshot the request opened before it waited on the order locks and
+    could miss alerts committed meanwhile.
+    """
     if not order_ids:
         return set()
-    stmt = select(Alert.production_order_id).where(
-        Alert.alert_type == AlertType.ORDER_OVERDUE,
-        Alert.acknowledged_at.is_(None),
-        Alert.production_order_id.in_(order_ids),
+    stmt = (
+        select(Alert.production_order_id)
+        .where(
+            Alert.alert_type == AlertType.ORDER_OVERDUE,
+            Alert.acknowledged_at.is_(None),
+            Alert.production_order_id.in_(order_ids),
+        )
+        .with_for_update()
     )
     return {order_id for order_id in session.scalars(stmt) if order_id is not None}
 
@@ -86,8 +106,15 @@ def raise_overdue_order_alerts(
 ) -> OverdueCheckResult:
     """Raise one ORDER_OVERDUE alert per overdue order that has no open overdue alert.
 
-    The alert is stamped with ``as_of`` so a check replayed for an earlier
-    moment sorts into the alert feed at that moment. The caller commits.
+    Idempotency guarantee: at most one open (unacknowledged) ORDER_OVERDUE
+    alert exists per order, however often and however concurrently the check
+    runs. The overdue orders and their open alerts are read with row locks, so
+    overlapping checks run one after the other inside the caller's transaction.
+
+    ``as_of`` defaults to the server clock and is the moment stamped on each
+    alert's ``created_at``. Only the command line job may pass another value,
+    to replay a past check; the HTTP endpoint never forwards a client value,
+    so a client cannot raise alerts early or back-date them. The caller commits.
     """
     moment = _naive(as_of or now())
     orders = overdue_orders(session, as_of=moment)

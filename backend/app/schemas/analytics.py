@@ -1,7 +1,6 @@
-from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel
 
 from app.schemas.investigation import AlertRead
 
@@ -23,15 +22,6 @@ class QueryResult(BaseModel):
     sql: str
     params: dict[str, Any]
     rows: list[dict[str, Any]]
-
-
-class OverdueCheckRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    as_of: datetime | None = Field(
-        default=None,
-        description="Moment the due dates are judged against; defaults to the server clock",
-    )
 
 
 class OverdueCheckResponse(BaseModel):
