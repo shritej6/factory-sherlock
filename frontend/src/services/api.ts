@@ -1,12 +1,13 @@
 import type {
   Alert,
   BackwardTrace,
+  BatchListParams,
   DefectType,
   ForwardTrace,
   Inspection,
   InspectionCreate,
   InspectionImportResult,
-  InspectionResult,
+  InspectionListParams,
   Investigation,
   InvestigationCreate,
   InvestigationStatusChange,
@@ -16,7 +17,10 @@ import type {
   MachineEvent,
   MachineStatusChange,
   MaterialLot,
+  OrderListParams,
   OrderStatus,
+  Page,
+  PageParams,
   Product,
   ProductionBatch,
   ProductionBatchCreate,
@@ -48,15 +52,15 @@ export const catalogApi = {
   machine: (id: number) => request<Machine>(`/machines/${id}`),
   changeMachineStatus: (id: number, body: MachineStatusChange) =>
     request<Machine>(`/machines/${id}/status`, { method: 'POST', body }),
-  machineEvents: (id: number, limit = 100) =>
-    request<MachineEvent[]>(`/machines/${id}/events`, { query: { limit } }),
+  machineEvents: (id: number, page: PageParams = {}) =>
+    request<Page<MachineEvent>>(`/machines/${id}/events`, { query: page }),
   materialLots: () => request<MaterialLot[]>('/material-lots'),
   defectTypes: () => request<DefectType[]>('/defect-types'),
 };
 
 export const productionApi = {
-  orders: (status?: OrderStatus | '') =>
-    request<ProductionOrder[]>('/production-orders', { query: { status } }),
+  orders: (params: OrderListParams = {}) =>
+    request<Page<ProductionOrder>>('/production-orders', { query: params }),
   createOrder: (body: ProductionOrderCreate) =>
     request<ProductionOrder>('/production-orders', { method: 'POST', body }),
   updateOrder: (id: number, body: ProductionOrderUpdate) =>
@@ -66,8 +70,8 @@ export const productionApi = {
       method: 'POST',
       body: { status },
     }),
-  batches: (filters: { order_id?: number; machine_id?: number } = {}) =>
-    request<ProductionBatch[]>('/production-batches', { query: filters }),
+  batches: (params: BatchListParams = {}) =>
+    request<Page<ProductionBatch>>('/production-batches', { query: params }),
   createBatch: (body: ProductionBatchCreate) =>
     request<ProductionBatch>('/production-batches', { method: 'POST', body }),
   completeBatch: (id: number) =>
@@ -77,8 +81,8 @@ export const productionApi = {
 };
 
 export const qualityApi = {
-  inspections: (filters: { batch_id?: number; result?: InspectionResult | ''; limit?: number }) =>
-    request<Inspection[]>('/inspections', { query: filters }),
+  inspections: (params: InspectionListParams = {}) =>
+    request<Page<Inspection>>('/inspections', { query: params }),
   recordInspection: (body: InspectionCreate) =>
     request<Inspection>('/inspections', { method: 'POST', body }),
   summary: (filters: { machine_id?: number; batch_id?: number } = {}) =>
@@ -91,7 +95,7 @@ export const qualityApi = {
 };
 
 export const investigationApi = {
-  list: () => request<Investigation[]>('/investigations'),
+  list: (page: PageParams = {}) => request<Page<Investigation>>('/investigations', { query: page }),
   get: (id: number) => request<Investigation>(`/investigations/${id}`),
   open: (body: InvestigationCreate) =>
     request<Investigation>('/investigations', { method: 'POST', body }),
@@ -115,7 +119,7 @@ export const analyticsApi = {
   catalog: () => request<QueryCatalogEntry[]>('/analytics/queries'),
   run: (name: string, params: QueryParams) =>
     request<QueryResult>(`/analytics/queries/${name}`, { query: { ...params } }),
-  alerts: (limit = 20) => request<Alert[]>('/analytics/alerts', { query: { limit } }),
+  alerts: (page: PageParams = {}) => request<Page<Alert>>('/analytics/alerts', { query: page }),
   acknowledgeAlert: (id: number) =>
     request<Alert>(`/analytics/alerts/${id}/acknowledge`, { method: 'POST' }),
 };

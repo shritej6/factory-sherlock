@@ -39,3 +39,7 @@ export const FAULT_KINDS: readonly FaultKind[] = [
 /** Demo data is dated 2026-11-02 to 2026-11-03; these defaults bracket it. */
 export const DEFAULT_WINDOW_START = '2026-11-01T00:00';
 export const DEFAULT_WINDOW_END = '2026-11-05T00:00';
+
+/** Page sizes offered by list screens; the API accepts 1 to 500 rows per page. */
+export const PAGE_SIZES: readonly number[] = [25, 50, 100];
+export const DEFAULT_PAGE_SIZE = 50;

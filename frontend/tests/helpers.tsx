@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { vi } from 'vitest';
 
 import { StaticAuthProvider } from '@/hooks/AuthProvider';
-import type { User, UserRole } from '@/types/api';
+import type { Page, User, UserRole } from '@/types/api';
 
 export function makeUser(role: UserRole): User {
   return {
@@ -22,6 +22,20 @@ export function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+/** Wraps rows in the envelope returned by paginated list endpoints. */
+export function pageOf<T>(items: T[], total = items.length, limit = 50, offset = 0): Page<T> {
+  return { items, total, limit, offset };
+}
+
+export function pageResponse<T>(
+  items: T[],
+  total = items.length,
+  limit = 50,
+  offset = 0,
+): Response {
+  return jsonResponse(pageOf(items, total, limit, offset));
 }
 
 type Handler = (url: string, init?: RequestInit) => Response | Promise<Response>;

@@ -4,10 +4,12 @@ import type { Column } from '@/components/ui/DataTable';
 import { DataTable } from '@/components/ui/DataTable';
 import { Disclosure } from '@/components/ui/Disclosure';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { PageBody, Pagination } from '@/components/ui/Pagination';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ErrorState, LoadingState } from '@/components/ui/States';
 import { useInvestigations, useMachines } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
+import { usePageState } from '@/hooks/usePageState';
 import type { Investigation } from '@/types/api';
 import { formatDateTime, formatNumber } from '@/utils/format';
 
@@ -15,7 +17,8 @@ import { OpenInvestigationForm } from './OpenInvestigationForm';
 
 export function InvestigationsPage() {
   const { can } = useAuth();
-  const investigations = useInvestigations();
+  const { page, setPage } = usePageState();
+  const investigations = useInvestigations(page);
   const machines = useMachines();
   const machineCode = (id: number | null) =>
     id === null ? 'Fleet' : (machines.data?.find((m) => m.id === id)?.code ?? `#${id}`);
@@ -80,18 +83,30 @@ export function InvestigationsPage() {
           </div>
         )}
         {investigations.data && (
-          <DataTable
-            columns={columns}
-            rows={investigations.data}
-            rowKey={(i) => i.id}
-            caption="Investigations"
-            emptyTitle="No investigations have been opened"
-            emptyHint={
-              can('investigation.manage')
-                ? 'Open one to run the rules against a machine and time window.'
-                : 'An engineer can open one from this screen.'
-            }
-          />
+          <>
+            <PageBody loading={investigations.isPlaceholderData}>
+              <DataTable
+                columns={columns}
+                rows={investigations.data.items}
+                rowKey={(i) => i.id}
+                caption="Investigations"
+                emptyTitle="No investigations have been opened"
+                emptyHint={
+                  can('investigation.manage')
+                    ? 'Open one to run the rules against a machine and time window.'
+                    : 'An engineer can open one from this screen.'
+                }
+              />
+            </PageBody>
+            <Pagination
+              total={investigations.data.total}
+              limit={page.limit}
+              offset={page.offset}
+              onChange={setPage}
+              label="Investigations"
+              className="px-4"
+            />
+          </>
         )}
       </div>
     </>

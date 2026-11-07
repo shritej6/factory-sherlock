@@ -5,8 +5,8 @@ import { DailyTrendChart } from '@/components/charts/DailyTrendChart';
 import { DefectRateChart } from '@/components/charts/DefectRateChart';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { ErrorState, LoadingState } from '@/components/ui/States';
-import { useAnalyticsQuery, useOrders, useQualitySummary } from '@/hooks/queries';
-import { DEFAULT_WINDOW_END, DEFAULT_WINDOW_START } from '@/types/constants';
+import { useAnalyticsQuery, useOrderCounts, useQualitySummary } from '@/hooks/queries';
+import { DEFAULT_WINDOW_END, DEFAULT_WINDOW_START, ORDER_STATUSES } from '@/types/constants';
 import {
   pivotDailyTrend,
   toDefectCategorySeries,
@@ -34,8 +34,8 @@ export function AnalyticsPage() {
   const defectRates = useAnalyticsQuery('machine_defect_rate_comparison', params);
   const recurring = useAnalyticsQuery('recurring_defects', params);
   const summary = useQualitySummary();
-  const orders = useOrders();
-  const queries = [trend, defectRates, recurring, summary, orders];
+  const orderCounts = useOrderCounts(ORDER_STATUSES);
+  const queries = [trend, defectRates, recurring, summary, orderCounts];
   const firstError = queries.find((q) => q.isError);
 
   return (
@@ -75,11 +75,11 @@ export function AnalyticsPage() {
             layout="vertical"
           />
         )}
-        {orders.data && (
+        {orderCounts.data && (
           <CountBarChart
             title="Production orders by status"
             description="Every order in the database, grouped by status."
-            points={toOrderStatusSeries(orders.data)}
+            points={toOrderStatusSeries(orderCounts.data)}
             colors={STATUS_SERIES_COLORS}
           />
         )}

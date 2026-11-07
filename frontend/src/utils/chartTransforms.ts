@@ -1,4 +1,5 @@
-import type { Inspection, ProductionOrder, ResultRow } from '@/types/api';
+import type { Inspection, OrderStatus, ResultRow } from '@/types/api';
+import { ORDER_STATUSES } from '@/types/constants';
 
 export interface DailyTrendPoint {
   date: string;
@@ -78,10 +79,12 @@ export function toDefectCategorySeries(rows: ResultRow[]): CountPoint[] {
     .sort((a, b) => b.value - a.value);
 }
 
-export function toOrderStatusSeries(orders: Pick<ProductionOrder, 'status'>[]): CountPoint[] {
-  const totals = new Map<string, number>();
-  for (const order of orders) totals.set(order.status, (totals.get(order.status) ?? 0) + 1);
-  return [...totals.entries()].map(([name, value]) => ({ name, value }));
+/** One bar per status that has orders, in lifecycle order; counts come from envelope totals. */
+export function toOrderStatusSeries(counts: Partial<Record<OrderStatus, number>>): CountPoint[] {
+  return ORDER_STATUSES.filter((status) => (counts[status] ?? 0) > 0).map((status) => ({
+    name: status,
+    value: counts[status] ?? 0,
+  }));
 }
 
 export function countInspectionResults(inspections: Pick<Inspection, 'result'>[]): {

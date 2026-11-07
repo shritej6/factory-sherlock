@@ -79,15 +79,9 @@ describe('category transforms', () => {
   });
 
   it('counts orders by status and inspections by result', () => {
-    expect(
-      toOrderStatusSeries([
-        { status: 'COMPLETED' },
-        { status: 'COMPLETED' },
-        { status: 'IN_PROGRESS' },
-      ]),
-    ).toEqual([
-      { name: 'COMPLETED', value: 2 },
+    expect(toOrderStatusSeries({ COMPLETED: 2, IN_PROGRESS: 1, PLANNED: 0 })).toEqual([
       { name: 'IN_PROGRESS', value: 1 },
+      { name: 'COMPLETED', value: 2 },
     ]);
     expect(
       countInspectionResults([{ result: 'PASS' }, { result: 'FAIL' }, { result: 'PASS' }]),

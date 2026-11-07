@@ -5,11 +5,11 @@ import { Panel } from '@/components/ui/Panel';
 import { StatTile } from '@/components/ui/StatTile';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
-import { useMachineEvents, useMachines, useQualitySummary } from '@/hooks/queries';
+import { useMachines, useQualitySummary } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDateTime, formatNumber, formatPercent } from '@/utils/format';
 
-import { EventTimeline } from './EventTimeline';
+import { MachineEventsPanel } from './MachineEventsPanel';
 import { MachineStatusForm } from './MachineStatusForm';
 
 export function MachinesPage() {
@@ -21,7 +21,6 @@ export function MachinesPage() {
     ? requested
     : (machines.data?.[0]?.id ?? null);
   const selected = machines.data?.find((m) => m.id === selectedId) ?? null;
-  const events = useMachineEvents(selectedId);
   const summary = useQualitySummary(selectedId ? { machine_id: selectedId } : {});
 
   return (
@@ -82,13 +81,7 @@ export function MachinesPage() {
                 <ErrorState error={summary.error} onRetry={() => void summary.refetch()} />
               )}
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
-                <Panel title="Event timeline" description={`${selected.code} · most recent first`}>
-                  {events.isPending && <LoadingState label="Loading events" />}
-                  {events.isError && (
-                    <ErrorState error={events.error} onRetry={() => void events.refetch()} />
-                  )}
-                  {events.data && <EventTimeline events={events.data} />}
-                </Panel>
+                <MachineEventsPanel key={selected.id} machine={selected} />
                 <Panel title="Change status" className="self-start">
                   {can('machine.changeStatus') ? (
                     <MachineStatusForm

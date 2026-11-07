@@ -18,6 +18,20 @@ export type InvestigationStatus = 'OPEN' | 'IN_REVIEW' | 'CLOSED';
 export type FaultKind =
   'TOOL_WEAR' | 'CALIBRATION_DRIFT' | 'VARIATION' | 'MATERIAL_ISSUE' | 'DOWNTIME';
 
+/** Paging parameters accepted by every list endpoint that returns a Page. */
+export type PageParams = {
+  limit?: number;
+  offset?: number;
+};
+
+/** Envelope returned by paginated list endpoints. */
+export interface Page<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface ErrorResponse {
   error: string;
   message: string;
@@ -115,6 +129,8 @@ export interface ProductionOrder {
   updated_at: string;
 }
 
+export type OrderListParams = PageParams & { status?: OrderStatus | '' };
+
 export interface ProductionOrderCreate {
   order_number: string;
   product_id: number;
@@ -158,6 +174,8 @@ export interface ProductionBatch {
   material_links: BatchMaterial[];
 }
 
+export type BatchListParams = PageParams & { order_id?: number; machine_id?: number };
+
 export interface QuarantineRequest {
   reason: string;
 }
@@ -192,6 +210,10 @@ export interface InspectionImportRowError {
   field: string | null;
   message: string;
 }
+export type InspectionListParams = PageParams & {
+  batch_id?: number;
+  result?: InspectionResult | '';
+};
 
 export interface QualitySummary {
   total_produced: number;

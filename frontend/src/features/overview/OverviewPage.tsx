@@ -1,32 +1,43 @@
 import { Link } from 'react-router';
 
 import { PageHeader } from '@/components/ui/PageHeader';
+import { PageBody, Pagination } from '@/components/ui/Pagination';
 import { Panel } from '@/components/ui/Panel';
 import { StatTile } from '@/components/ui/StatTile';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import {
+  LOOKUP_PAGE,
   useAlerts,
   useInvestigations,
   useMachines,
-  useOrders,
+  useOrderCounts,
   useQualitySummary,
 } from '@/hooks/queries';
+import { usePageState } from '@/hooks/usePageState';
 import { formatNumber, formatPercent } from '@/utils/format';
 
 import { AlertsList } from './AlertsList';
 import { MachineStatusCard } from './MachineStatusCard';
 
+/**
+ * The Overview is the only screen that lists alerts, so it pages through all of them
+ * rather than showing a fixed number of recent ones; a short page keeps the panel compact.
+ */
+const ALERT_PAGE_SIZE = 10;
+const ALERT_PAGE_SIZES: readonly number[] = [10, 25, 50];
+
 export function OverviewPage() {
   const machines = useMachines();
   const summary = useQualitySummary();
-  const orders = useOrders();
-  const alerts = useAlerts();
-  const investigations = useInvestigations();
+  const orderCounts = useOrderCounts(['RELEASED', 'IN_PROGRESS']);
+  const { page: alertPage, setPage: setAlertPage } = usePageState(ALERT_PAGE_SIZE);
+  const alerts = useAlerts(alertPage);
+  const investigations = useInvestigations(LOOKUP_PAGE);
 
-  const activeOrders = orders.data?.filter(
-    (o) => o.status === 'RELEASED' || o.status === 'IN_PROGRESS',
-  ).length;
-  const openInvestigations = investigations.data?.filter((i) => i.status !== 'CLOSED').length;
+  const activeOrders = orderCounts.data
+    ? orderCounts.data.RELEASED + orderCounts.data.IN_PROGRESS
+    : undefined;
+  const openInvestigations = investigations.data?.items.filter((i) => i.status !== 'CLOSED').length;
 
   return (
     <>
@@ -102,7 +113,22 @@ export function OverviewPage() {
           {alerts.isError && (
             <ErrorState error={alerts.error} onRetry={() => void alerts.refetch()} />
           )}
-          {alerts.data && <AlertsList alerts={alerts.data} />}
+          {alerts.data && (
+            <>
+              <PageBody loading={alerts.isPlaceholderData}>
+                <AlertsList alerts={alerts.data.items} />
+              </PageBody>
+              <Pagination
+                total={alerts.data.total}
+                limit={alertPage.limit}
+                offset={alertPage.offset}
+                onChange={setAlertPage}
+                label="Alerts"
+                pageSizes={ALERT_PAGE_SIZES}
+                className="mt-3"
+              />
+            </>
+          )}
         </Panel>
         <Panel
           title="Investigations"
@@ -125,14 +151,14 @@ export function OverviewPage() {
                 {formatNumber(openInvestigations ?? 0)}
                 <span className="ml-2 text-sm font-normal text-ink-muted">open or in review</span>
               </p>
-              {investigations.data.length === 0 ? (
+              {investigations.data.items.length === 0 ? (
                 <EmptyState
                   title="No investigations yet"
                   hint="Open one from the Investigations screen."
                 />
               ) : (
                 <ul className="divide-y divide-border text-sm">
-                  {investigations.data.slice(0, 5).map((inv) => (
+                  {investigations.data.items.slice(0, 5).map((inv) => (
                     <li key={inv.id} className="py-2">
                       <Link
                         to={`/investigations/${inv.id}`}
