@@ -16,6 +16,7 @@ import { DEFAULT_WINDOW_END, DEFAULT_WINDOW_START } from '@/types/constants';
 import { toDefectRateSeries } from '@/utils/chartTransforms';
 import { formatDateTime, toApiDateTime } from '@/utils/format';
 
+import { ImportInspectionsPanel } from './ImportInspectionsPanel';
 import { InspectionForm } from './InspectionForm';
 
 export function InspectionsPage() {
@@ -66,6 +67,7 @@ export function InspectionsPage() {
           )
         }
       />
+      <ImportInspectionsPanel />
       <div className="mb-4">
         {defectRates.isError && (
           <ErrorState error={defectRates.error} onRetry={() => void defectRates.refetch()} />

@@ -5,6 +5,7 @@ import type {
   ForwardTrace,
   Inspection,
   InspectionCreate,
+  InspectionImportResult,
   InspectionResult,
   Investigation,
   InvestigationCreate,
@@ -82,6 +83,11 @@ export const qualityApi = {
     request<Inspection>('/inspections', { method: 'POST', body }),
   summary: (filters: { machine_id?: number; batch_id?: number } = {}) =>
     request<QualitySummary>('/quality/summary', { query: filters }),
+  importInspections: (file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    return request<InspectionImportResult>('/inspections/import', { method: 'POST', body });
+  },
 };
 
 export const investigationApi = {
