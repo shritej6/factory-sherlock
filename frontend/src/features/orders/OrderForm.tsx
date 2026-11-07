@@ -4,12 +4,11 @@ import type { FormEvent } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { SelectField, TextField } from '@/components/ui/Field';
-import { ErrorState, InlineNotice } from '@/components/ui/States';
+import { ErrorNotice, ErrorState } from '@/components/ui/States';
 import { invalidateProduction } from '@/hooks/invalidate';
 import { useMachines, useProducts } from '@/hooks/queries';
 import { productionApi } from '@/services/api';
 import type { ProductionOrder } from '@/types/api';
-import { describeError } from '@/utils/errors';
 
 interface OrderFormProps {
   /** When set, the form edits this order (machine, quantity, due date only). */
@@ -26,7 +25,7 @@ export function OrderForm({ order, onDone }: OrderFormProps) {
   const [machineId, setMachineId] = useState(order?.machine_id ? String(order.machine_id) : '');
   const [quantity, setQuantity] = useState(order ? String(order.quantity_planned) : '');
   const [dueDate, setDueDate] = useState(order?.due_date ?? '');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
 
   const save = useMutation({
     mutationFn: () => {
@@ -51,7 +50,7 @@ export function OrderForm({ order, onDone }: OrderFormProps) {
       invalidateProduction(queryClient);
       onDone();
     },
-    onError: (cause) => setError(describeError(cause)),
+    onError: setError,
   });
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -133,9 +132,9 @@ export function OrderForm({ order, onDone }: OrderFormProps) {
         value={dueDate}
         onChange={(e) => setDueDate(e.target.value)}
       />
-      {error && (
+      {error !== null && (
         <div className="md:col-span-2 xl:col-span-5">
-          <InlineNotice tone="error">{error}</InlineNotice>
+          <ErrorNotice error={error} />
         </div>
       )}
       <div className="flex gap-2 md:col-span-2 xl:col-span-5">

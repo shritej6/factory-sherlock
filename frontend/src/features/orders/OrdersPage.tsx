@@ -8,7 +8,7 @@ import { SelectField } from '@/components/ui/Field';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PageBody, Pagination } from '@/components/ui/Pagination';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { ErrorState, InlineNotice, LoadingState } from '@/components/ui/States';
+import { ErrorNotice, ErrorState, LoadingState } from '@/components/ui/States';
 import { useMachines, useOrders, useProducts } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
 import { usePageState } from '@/hooks/usePageState';
@@ -24,7 +24,7 @@ export function OrdersPage() {
   const { can } = useAuth();
   const [status, setStatus] = useState<OrderStatus | ''>('');
   const [editing, setEditing] = useState<ProductionOrder | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const { page, setPage, resetOffset } = usePageState();
   const orders = useOrders({ status, ...page });
   const products = useProducts();
@@ -112,9 +112,9 @@ export function OrdersPage() {
           ))}
         </SelectField>
       </div>
-      {actionError && (
+      {actionError !== null && (
         <div className="mb-3">
-          <InlineNotice tone="error">{actionError}</InlineNotice>
+          <ErrorNotice error={actionError} />
         </div>
       )}
       <div className="panel">

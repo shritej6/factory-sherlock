@@ -1,21 +1,21 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { TextAreaField } from '@/components/ui/Field';
-import { InlineNotice } from '@/components/ui/States';
+import { ErrorNotice } from '@/components/ui/States';
 import { queryKeys } from '@/hooks/queries';
 import { investigationApi } from '@/services/api';
 import type { Investigation, InvestigationStatus } from '@/types/api';
-import { describeError } from '@/utils/errors';
 import { legalInvestigationMoves } from '@/utils/transitions';
 
 export function StatusActions({ investigation }: { investigation: Investigation }) {
   const queryClient = useQueryClient();
   const [closing, setClosing] = useState(false);
   const [conclusion, setConclusion] = useState(investigation.conclusion ?? '');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const closeTrigger = useRef<HTMLButtonElement>(null);
   const moves = legalInvestigationMoves(investigation.status);
 
   const change = useMutation({
@@ -30,7 +30,7 @@ export function StatusActions({ investigation }: { investigation: Investigation 
       void queryClient.invalidateQueries({ queryKey: queryKeys.investigations });
       void queryClient.invalidateQueries({ queryKey: queryKeys.investigation(investigation.id) });
     },
-    onError: (cause) => setError(describeError(cause)),
+    onError: setError,
   });
 
   if (moves.length === 0)
@@ -40,6 +40,12 @@ export function StatusActions({ investigation }: { investigation: Investigation 
     event.preventDefault();
     if (!conclusion.trim()) return;
     change.mutate('CLOSED');
+  }
+
+  // Cancelling removes the focused button, so focus goes back to the control that opened the form.
+  function cancelClose() {
+    setClosing(false);
+    requestAnimationFrame(() => closeTrigger.current?.focus());
   }
 
   return (
@@ -62,7 +68,7 @@ export function StatusActions({ investigation }: { investigation: Investigation 
           </Button>
         )}
         {moves.includes('CLOSED') && !closing && (
-          <Button variant="primary" onClick={() => setClosing(true)}>
+          <Button ref={closeTrigger} variant="primary" onClick={() => setClosing(true)}>
             Close with conclusion
           </Button>
         )}
@@ -79,6 +85,7 @@ export function StatusActions({ investigation }: { investigation: Investigation 
             onChange={(e) => setConclusion(e.target.value)}
             maxLength={4000}
             required
+            autoFocus
             hint="Required. State what was found and what action was taken."
           />
           <div className="flex gap-2">
@@ -90,11 +97,11 @@ export function StatusActions({ investigation }: { investigation: Investigation 
             >
               Close case
             </Button>
-            <Button onClick={() => setClosing(false)}>Cancel</Button>
+            <Button onClick={cancelClose}>Cancel</Button>
           </div>
         </form>
       )}
-      {error && <InlineNotice tone="error">{error}</InlineNotice>}
+      {error !== null && <ErrorNotice error={error} />}
     </div>
   );
 }

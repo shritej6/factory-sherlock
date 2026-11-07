@@ -18,12 +18,13 @@ import {
   REFERENCE_COLOR,
   TOOLTIP_STYLE,
 } from '@/utils/chartTheme';
+import { formatNumber, formatPercent } from '@/utils/format';
 
 import { ChartFrame } from './ChartFrame';
 
+/** Whole percentages read as "5%", fractional ticks keep one decimal. */
 function percentTick(value: number): string {
-  const percent = value * 100;
-  return `${percent % 1 === 0 ? percent : percent.toFixed(1)}%`;
+  return formatPercent(value, (value * 100) % 1 === 0 ? 0 : 1);
 }
 
 export function DefectRateChart({ points }: { points: DefectRatePoint[] }) {
@@ -38,7 +39,7 @@ export function DefectRateChart({ points }: { points: DefectRatePoint[] }) {
   return (
     <ChartFrame
       title="Defect rate by machine"
-      description={`Failed inspections divided by inspections in the window. Dashed line: fleet rate ${(fleet * 100).toFixed(1)}%.`}
+      description={`Failed inspections divided by inspections in the window. Dashed line: fleet rate ${formatPercent(fleet)}.`}
       empty={points.length === 0}
       tableRows={tableRows}
     >
@@ -64,7 +65,7 @@ export function DefectRateChart({ points }: { points: DefectRatePoint[] }) {
             formatter={(value, _name, item) => {
               const point = item.payload as DefectRatePoint;
               return [
-                `${(Number(value) * 100).toFixed(1)}% (${point.failed} of ${point.inspected})`,
+                `${formatPercent(Number(value))} (${formatNumber(point.failed)} of ${formatNumber(point.inspected)})`,
                 'Defect rate',
               ];
             }}

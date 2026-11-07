@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/Button';
 import { invalidateProduction } from '@/hooks/invalidate';
 import { productionApi } from '@/services/api';
 import type { OrderStatus, ProductionOrder } from '@/types/api';
-import { describeError } from '@/utils/errors';
 import { titleCase } from '@/utils/format';
 import { legalOrderMoves } from '@/utils/transitions';
 
@@ -18,8 +17,8 @@ const MOVE_LABELS: Record<OrderStatus, string> = {
 
 interface OrderTransitionsProps {
   order: ProductionOrder;
-  /** Receives the failure message, or null once a later action succeeds. */
-  onResult: (message: string | null) => void;
+  /** Receives the failure, or null once a later action succeeds. */
+  onResult: (error: unknown) => void;
 }
 
 export function OrderTransitions({ order, onResult }: OrderTransitionsProps) {
@@ -31,7 +30,7 @@ export function OrderTransitions({ order, onResult }: OrderTransitionsProps) {
       onResult(null);
       invalidateProduction(queryClient);
     },
-    onError: (cause) => onResult(describeError(cause)),
+    onError: onResult,
   });
 
   if (moves.length === 0) return <span className="text-xs text-ink-faint">Terminal state</span>;

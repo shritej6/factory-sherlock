@@ -23,7 +23,7 @@ import {
   seriesColor,
   TOOLTIP_STYLE,
 } from '@/utils/chartTheme';
-import { formatDateTime } from '@/utils/format';
+import { formatDateTime, formatMeasure } from '@/utils/format';
 
 import { ChartFrame } from './ChartFrame';
 
@@ -37,11 +37,6 @@ interface ControlChartProps {
   unit: string;
   title?: string;
   description?: string;
-}
-
-function formatMeasure(value: number | string | null | undefined): string {
-  if (value === null || value === undefined) return 'n/a';
-  return Number(value).toFixed(3);
 }
 
 /** Show at most MAX_TICKS labels; Recharts' interval is the number of ticks skipped between labels. */
@@ -186,6 +181,7 @@ export function ControlChart({
       emptyTitle="No inspections of this characteristic in the window"
       height={340}
       tableRows={points.map(toTableRow)}
+      headingLevel="h3"
     >
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={points} margin={{ top: 8, right: 24, left: 0, bottom: 0 }}>
@@ -201,7 +197,7 @@ export function ControlChart({
           <YAxis
             domain={domain}
             ticks={ticks}
-            tickFormatter={formatMeasure}
+            tickFormatter={(value) => formatMeasure(value)}
             tick={{ fill: AXIS_COLOR, fontSize: 12 }}
             axisLine={false}
             tickLine={false}

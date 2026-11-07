@@ -6,6 +6,9 @@ interface FieldError {
   message: string;
 }
 
+/** Outcome of a form submission: a success sentence, or the failure for ErrorNotice to describe. */
+export type MutationMessage = { tone: 'success'; text: string } | { tone: 'error'; error: unknown };
+
 /** Produces the sentence shown to the user for any failure. */
 export function describeError(error: unknown): string {
   if (error instanceof ApiError) {

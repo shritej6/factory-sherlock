@@ -4,18 +4,18 @@ import type { FormEvent } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { SelectField, TextField } from '@/components/ui/Field';
-import { ErrorState, InlineNotice } from '@/components/ui/States';
+import { ErrorNotice, ErrorState, InlineNotice } from '@/components/ui/States';
 import { invalidateProduction } from '@/hooks/invalidate';
 import { useMaterialLots } from '@/hooks/queries';
 import { traceabilityApi } from '@/services/api';
-import { describeError } from '@/utils/errors';
+import type { MutationMessage } from '@/utils/errors';
 
 export function QuarantineLotForm() {
   const queryClient = useQueryClient();
   const lots = useMaterialLots();
   const [lotId, setLotId] = useState('');
   const [reason, setReason] = useState('');
-  const [message, setMessage] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
+  const [message, setMessage] = useState<MutationMessage | null>(null);
 
   const quarantine = useMutation({
     mutationFn: () => traceabilityApi.quarantineLot(Number(lotId), { reason: reason.trim() }),
@@ -27,7 +27,7 @@ export function QuarantineLotForm() {
       setReason('');
       invalidateProduction(queryClient);
     },
-    onError: (cause) => setMessage({ tone: 'error', text: describeError(cause) }),
+    onError: (cause) => setMessage({ tone: 'error', error: cause }),
   });
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -76,7 +76,8 @@ export function QuarantineLotForm() {
         required
         hint="Every batch that consumed the lot is quarantined in the same transaction."
       />
-      {message && <InlineNotice tone={message.tone}>{message.text}</InlineNotice>}
+      {message?.tone === 'success' && <InlineNotice tone="success">{message.text}</InlineNotice>}
+      {message?.tone === 'error' && <ErrorNotice error={message.error} />}
       <Button
         type="submit"
         variant="danger"

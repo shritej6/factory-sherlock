@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { Button } from './Button';
@@ -19,9 +19,19 @@ export function Disclosure({
 }: DisclosureProps) {
   const [open, setOpen] = useState(false);
   const id = useId();
+  const toggle = useRef<HTMLButtonElement>(null);
+  const wasOpen = useRef(false);
+
+  // The form's own Cancel or submit removes the element that had focus, so focus returns here.
+  useEffect(() => {
+    if (wasOpen.current && !open) toggle.current?.focus();
+    wasOpen.current = open;
+  }, [open]);
+
   return (
     <>
       <Button
+        ref={toggle}
         variant={open ? 'secondary' : variant}
         aria-expanded={open}
         aria-controls={id}

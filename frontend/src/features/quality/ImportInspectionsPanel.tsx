@@ -6,11 +6,12 @@ import type { Column } from '@/components/ui/DataTable';
 import { DataTable } from '@/components/ui/DataTable';
 import { Disclosure } from '@/components/ui/Disclosure';
 import { TextField } from '@/components/ui/Field';
-import { InlineNotice } from '@/components/ui/States';
+import { ErrorNotice, InlineNotice } from '@/components/ui/States';
 import { useAuth } from '@/hooks/useAuth';
 import { ApiError } from '@/services/http';
 import type { InspectionImportResult, InspectionImportRowError } from '@/types/api';
-import { describeError, extractImportRowErrors } from '@/utils/errors';
+import { extractImportRowErrors } from '@/utils/errors';
+import { formatNumber } from '@/utils/format';
 
 import { useImportInspections } from './useImportInspections';
 
@@ -118,8 +119,8 @@ function ImportForm() {
           ))}
         </ul>
         <p className="mt-2">
-          UTF-8 CSV with a header row, at most {MAX_IMPORT_ROWS} data rows and 1 MiB. Nothing is
-          imported if any row fails validation.
+          UTF-8 CSV with a header row, at most {formatNumber(MAX_IMPORT_ROWS)} data rows and 1 MiB.
+          Nothing is imported if any row fails validation.
         </p>
       </div>
       <TextField
@@ -135,11 +136,11 @@ function ImportForm() {
         <InlineNotice tone="success">{summarize(importInspections.data)}</InlineNotice>
       )}
       {importInspections.error && (
-        <InlineNotice tone="error">
+        <ErrorNotice error={importInspections.error}>
           {rowErrors.length > 0
             ? `${importInspections.error.message}. Fix the rows below and import the file again.`
-            : describeError(importInspections.error)}
-        </InlineNotice>
+            : undefined}
+        </ErrorNotice>
       )}
       {rowErrors.length > 0 && (
         <DataTable

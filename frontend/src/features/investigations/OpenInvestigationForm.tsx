@@ -5,11 +5,10 @@ import { useNavigate } from 'react-router';
 
 import { Button } from '@/components/ui/Button';
 import { SelectField, TextField } from '@/components/ui/Field';
-import { ErrorState, InlineNotice } from '@/components/ui/States';
+import { ErrorNotice, ErrorState } from '@/components/ui/States';
 import { queryKeys, useMachines } from '@/hooks/queries';
 import { investigationApi } from '@/services/api';
 import { DEFAULT_WINDOW_END, DEFAULT_WINDOW_START } from '@/types/constants';
-import { describeError } from '@/utils/errors';
 import { toApiDateTime } from '@/utils/format';
 
 export function OpenInvestigationForm({ onDone }: { onDone: () => void }) {
@@ -20,7 +19,7 @@ export function OpenInvestigationForm({ onDone }: { onDone: () => void }) {
   const [machineId, setMachineId] = useState('');
   const [windowStart, setWindowStart] = useState(DEFAULT_WINDOW_START);
   const [windowEnd, setWindowEnd] = useState(DEFAULT_WINDOW_END);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
 
   const open = useMutation({
     mutationFn: () =>
@@ -35,14 +34,14 @@ export function OpenInvestigationForm({ onDone }: { onDone: () => void }) {
       onDone();
       navigate(`/investigations/${investigation.id}`);
     },
-    onError: (cause) => setError(describeError(cause)),
+    onError: setError,
   });
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     if (windowEnd <= windowStart) {
-      setError('The window end must be after the window start.');
+      setError(new Error('The window end must be after the window start.'));
       return;
     }
     open.mutate();
@@ -102,9 +101,9 @@ export function OpenInvestigationForm({ onDone }: { onDone: () => void }) {
         onChange={(e) => setWindowEnd(e.target.value)}
         required
       />
-      {error && (
+      {error !== null && (
         <div className="md:col-span-2 xl:col-span-4">
-          <InlineNotice tone="error">{error}</InlineNotice>
+          <ErrorNotice error={error} />
         </div>
       )}
       <div className="flex gap-2 md:col-span-2 xl:col-span-4">

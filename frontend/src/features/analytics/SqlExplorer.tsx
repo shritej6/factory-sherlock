@@ -184,7 +184,7 @@ export function SqlExplorer({ defaultWindow }: SqlExplorerProps) {
           )}
           {result.data && (
             <>
-              <p className="mb-2 text-xs text-ink-muted">
+              <p role="status" className="mb-2 text-xs text-ink-muted">
                 <code className="font-mono text-ink">{result.data.query}</code> returned{' '}
                 {formatNumber(result.data.rows.length)} row(s).
               </p>

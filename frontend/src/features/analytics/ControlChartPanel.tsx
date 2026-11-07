@@ -7,7 +7,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { useAnalyticsQuery, useMachines, useSpecifications } from '@/hooks/queries';
 import type { QueryResult, SpecificationListItem } from '@/types/api';
 import { describeControlChart, toControlChartSeries } from '@/utils/chartTransforms';
-import { toApiDateTime } from '@/utils/format';
+import { formatMeasure, toApiDateTime } from '@/utils/format';
 
 import type { TimeWindow } from './WindowControls';
 
@@ -30,8 +30,8 @@ function ControlChartResult({
   spec: SpecificationListItem;
 }) {
   const series = toControlChartSeries(result.rows);
-  const target = Number(spec.target_value).toFixed(3);
-  const tolerance = Number(spec.tolerance).toFixed(3);
+  const target = formatMeasure(spec.target_value);
+  const tolerance = formatMeasure(spec.tolerance);
   return (
     <>
       <ControlChart

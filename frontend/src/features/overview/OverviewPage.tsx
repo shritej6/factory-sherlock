@@ -14,7 +14,7 @@ import {
   useQualitySummary,
 } from '@/hooks/queries';
 import { usePageState } from '@/hooks/usePageState';
-import { formatNumber, formatPercent } from '@/utils/format';
+import { formatNumber, formatPercent, titleCase } from '@/utils/format';
 
 import { AlertsList } from './AlertsList';
 import { MachineStatusCard } from './MachineStatusCard';
@@ -72,28 +72,28 @@ export function OverviewPage() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-6">
           <StatTile
             label="Units produced"
-            value={summary.data ? formatNumber(summary.data.total_produced) : '...'}
+            value={summary.data ? formatNumber(summary.data.total_produced) : undefined}
           />
           <StatTile
             label="Inspections"
-            value={summary.data ? formatNumber(summary.data.total_inspected) : '...'}
+            value={summary.data ? formatNumber(summary.data.total_inspected) : undefined}
           />
           <StatTile
             label="Passed"
-            value={summary.data ? formatNumber(summary.data.passed) : '...'}
+            value={summary.data ? formatNumber(summary.data.passed) : undefined}
           />
           <StatTile
             label="Failed"
-            value={summary.data ? formatNumber(summary.data.failed) : '...'}
+            value={summary.data ? formatNumber(summary.data.failed) : undefined}
           />
           <StatTile
             label="Defect rate"
-            value={summary.data ? formatPercent(summary.data.defect_rate) : '...'}
+            value={summary.data ? formatPercent(summary.data.defect_rate) : undefined}
             detail="failed / inspected"
           />
           <StatTile
             label="Active orders"
-            value={activeOrders === undefined ? '...' : formatNumber(activeOrders)}
+            value={activeOrders === undefined ? undefined : formatNumber(activeOrders)}
             detail="released or in progress"
           />
         </div>
@@ -167,7 +167,8 @@ export function OverviewPage() {
                         {inv.title}
                       </Link>
                       <p className="text-xs text-ink-muted">
-                        {inv.status.replace('_', ' ')} · {inv.batch_links.length} flagged batch(es)
+                        {titleCase(inv.status)} · {formatNumber(inv.batch_links.length)} flagged
+                        batch(es)
                       </p>
                     </li>
                   ))}

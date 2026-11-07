@@ -89,9 +89,11 @@ describe('ImportInspectionsPanel', () => {
     await userEvent.upload(input, csvFile);
     await userEvent.click(importButton);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
       'The CSV failed validation. Fix the rows below and import the file again.',
     );
+    expect(alert).toHaveTextContent('Request id req-1');
     const table = screen.getByRole('table', { name: 'Import errors by row' });
     const rows = within(table).getAllByRole('row').slice(1);
     expect(rows).toHaveLength(2);
