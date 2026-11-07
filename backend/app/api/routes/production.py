@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import CurrentUser, DbSession, Engineer, Operator
+from app.api.deps import CurrentUser, DbSession, Engineer, Operator, Paging
 from app.models.enums import OrderStatus
+from app.schemas.common import Page
 from app.schemas.production import (
     ProductionBatchCreate,
     ProductionBatchRead,
@@ -16,14 +17,15 @@ from app.services import production_service, traceability_service
 router = APIRouter(tags=["production"])
 
 
-@router.get("/production-orders", response_model=list[ProductionOrderRead])
+@router.get("/production-orders", response_model=Page[ProductionOrderRead])
 def list_orders(
     session: DbSession,
     _: CurrentUser,
+    paging: Paging,
     status_filter: OrderStatus | None = Query(None, alias="status"),
-) -> list[ProductionOrderRead]:
-    orders = production_service.list_orders(session, status=status_filter)
-    return [ProductionOrderRead.model_validate(o) for o in orders]
+) -> Page[ProductionOrderRead]:
+    result = production_service.list_orders(session, paging, status=status_filter)
+    return Page[ProductionOrderRead].from_result(result, paging, ProductionOrderRead.model_validate)
 
 
 @router.post(
@@ -56,15 +58,18 @@ def change_order_status(
     return ProductionOrderRead.model_validate(order)
 
 
-@router.get("/production-batches", response_model=list[ProductionBatchRead])
+@router.get("/production-batches", response_model=Page[ProductionBatchRead])
 def list_batches(
     session: DbSession,
     _: CurrentUser,
+    paging: Paging,
     order_id: int | None = Query(None, gt=0),
     machine_id: int | None = Query(None, gt=0),
-) -> list[ProductionBatchRead]:
-    batches = production_service.list_batches(session, order_id=order_id, machine_id=machine_id)
-    return [ProductionBatchRead.model_validate(b) for b in batches]
+) -> Page[ProductionBatchRead]:
+    result = production_service.list_batches(
+        session, paging, order_id=order_id, machine_id=machine_id
+    )
+    return Page[ProductionBatchRead].from_result(result, paging, ProductionBatchRead.model_validate)
 
 
 @router.post(

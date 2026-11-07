@@ -106,6 +106,7 @@ def test_viewer_sees_orders_but_cannot_change_status(
     client: TestClient, engineer: dict[str, str], viewer: dict[str, str], ids: Ids
 ) -> None:
     order = _order(client, engineer, ids)
-    assert len(client.get("/api/v1/production-orders", headers=viewer).json()) == 1
+    listed = client.get("/api/v1/production-orders", headers=viewer).json()
+    assert listed["total"] == 1 and [o["id"] for o in listed["items"]] == [order["id"]]
     url = f"/api/v1/production-orders/{order['id']}/status"
     assert client.post(url, json={"status": "CANCELLED"}, headers=viewer).status_code == 403

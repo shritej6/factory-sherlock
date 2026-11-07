@@ -31,7 +31,7 @@ def test_simulation_is_deterministic_across_runs(
     first = client.post("/api/v1/simulation/runs", json=body, headers=engineer).json()
     second = client.post("/api/v1/simulation/runs", json=body, headers=engineer).json()
     assert first["failed_inspections"] == second["failed_inspections"]
-    orders = client.get("/api/v1/production-orders", headers=engineer).json()
+    orders = client.get("/api/v1/production-orders", headers=engineer).json()["items"]
     assert len(orders) == 6
     assert {o["order_number"][:7] for o in orders} == {"SIM0001", "SIM0004"}
 

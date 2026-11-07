@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.clock import now
 from app.core.exceptions import NotFoundError, ValidationError
 from app.models import Alert
+from app.repositories.pagination import PageParams, PageResult, paginate
 from app.repositories.query_runner import SqlQueryRunner
 from app.repositories.sql_loader import load_sql, query_names
 
@@ -66,9 +67,9 @@ def list_query_catalog() -> list[dict[str, object]]:
     return catalog
 
 
-def recent_alerts(session: Session, *, limit: int = 20) -> list[Alert]:
-    stmt = select(Alert).order_by(Alert.created_at.desc(), Alert.id.desc()).limit(limit)
-    return list(session.scalars(stmt))
+def recent_alerts(session: Session, paging: PageParams) -> PageResult[Alert]:
+    stmt = select(Alert).order_by(Alert.created_at.desc(), Alert.id.desc())
+    return paginate(session, stmt, paging)
 
 
 def acknowledge_alert(session: Session, alert_id: int, *, user_id: int) -> Alert:

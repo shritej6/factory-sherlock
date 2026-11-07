@@ -15,6 +15,7 @@ from app.models import (
     ProductionUnit,
     ProductSpecification,
 )
+from app.repositories.pagination import PageParams, PageResult, paginate
 from app.schemas.quality import InspectionCreate, InspectionRead, QualitySummary
 from app.services.catalog_service import _flush_or_conflict
 
@@ -76,22 +77,21 @@ def to_read(inspection: Inspection) -> InspectionRead:
 
 def list_inspections(
     session: Session,
+    paging: PageParams,
     *,
     batch_id: int | None = None,
     result: InspectionResult | None = None,
-    limit: int = 200,
-) -> list[Inspection]:
+) -> PageResult[Inspection]:
     stmt = (
         select(Inspection)
         .options(selectinload(Inspection.defect_links).selectinload(InspectionDefect.defect_type))
         .order_by(Inspection.inspected_at.desc(), Inspection.id.desc())
-        .limit(limit)
     )
     if batch_id is not None:
         stmt = stmt.join(ProductionUnit).where(ProductionUnit.batch_id == batch_id)
     if result is not None:
         stmt = stmt.where(Inspection.result == result)
-    return list(session.scalars(stmt))
+    return paginate(session, stmt, paging)
 
 
 def quality_summary(

@@ -16,6 +16,7 @@ from app.models import (
     InvestigationEvidence,
     InvestigationStatus,
 )
+from app.repositories.pagination import PageParams, PageResult, paginate
 from app.repositories.query_runner import SqlQueryRunner
 from app.schemas.investigation import InvestigationCreate
 from app.services import catalog_service
@@ -26,9 +27,13 @@ _LOAD = (
 )
 
 
-def list_investigations(session: Session) -> list[Investigation]:
-    stmt = select(Investigation).options(*_LOAD).order_by(Investigation.created_at.desc())
-    return list(session.scalars(stmt))
+def list_investigations(session: Session, paging: PageParams) -> PageResult[Investigation]:
+    stmt = (
+        select(Investigation)
+        .options(*_LOAD)
+        .order_by(Investigation.created_at.desc(), Investigation.id.desc())
+    )
+    return paginate(session, stmt, paging)
 
 
 def get_investigation(session: Session, investigation_id: int) -> Investigation:

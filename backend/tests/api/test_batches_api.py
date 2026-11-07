@@ -174,7 +174,7 @@ def test_quarantine_batch_records_reason_and_alert(
     assert (
         done["status"] == "QUARANTINED" and done["quarantine_reason"] == "Oversize diameters found"
     )
-    alerts = client.get("/api/v1/analytics/alerts", headers=engineer).json()
+    alerts = client.get("/api/v1/analytics/alerts", headers=engineer).json()["items"]
     assert alerts[0]["alert_type"] == "MATERIAL_QUARANTINE"
     # A quarantined batch cannot be completed.
     assert (
@@ -215,7 +215,7 @@ def test_quarantine_is_idempotent(client: TestClient, engineer: dict[str, str], 
     second = client.post(url, json={"reason": "Second notice"}, headers=engineer)
     assert second.status_code == 200
     assert second.json()["quarantine_reason"] == first["quarantine_reason"]
-    alerts = client.get("/api/v1/analytics/alerts", headers=engineer).json()
+    alerts = client.get("/api/v1/analytics/alerts", headers=engineer).json()["items"]
     assert sum(1 for a in alerts if batch["batch_number"] in a["message"]) == 1
 
 

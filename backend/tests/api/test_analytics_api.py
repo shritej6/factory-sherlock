@@ -52,7 +52,7 @@ def test_alerts_can_be_acknowledged_once_by_operators(
     operator: dict[str, str],
     simulated: dict[str, object],
 ) -> None:
-    alerts = client.get("/api/v1/analytics/alerts", headers=viewer).json()
+    alerts = client.get("/api/v1/analytics/alerts", headers=viewer).json()["items"]
     assert alerts and alerts[0]["acknowledged_at"] is None
     url = f"/api/v1/analytics/alerts/{alerts[0]['id']}/acknowledge"
     assert client.post(url, headers=viewer).status_code == 403

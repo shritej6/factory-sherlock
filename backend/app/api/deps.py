@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,7 @@ from app.core.database import get_db_session
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.core.security import decode_access_token
 from app.models import User, UserRole
+from app.repositories.pagination import PageParams
 from app.services import auth_service
 
 # scope="function" closes the session (and so commits) before the response is
@@ -58,3 +59,12 @@ def require_roles(allowed: frozenset[UserRole]) -> Callable[[User], User]:
 
 Operator = Annotated[User, Depends(require_roles(OPERATOR_ROLES))]
 Engineer = Annotated[User, Depends(require_roles(ENGINEER_ROLES))]
+
+
+def get_page_params(
+    limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0)
+) -> PageParams:
+    return PageParams(limit=limit, offset=offset)
+
+
+Paging = Annotated[PageParams, Depends(get_page_params)]

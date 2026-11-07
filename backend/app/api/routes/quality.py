@@ -1,23 +1,24 @@
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import CurrentUser, DbSession, Operator
+from app.api.deps import CurrentUser, DbSession, Operator, Paging
 from app.models.enums import InspectionResult
+from app.schemas.common import Page
 from app.schemas.quality import InspectionCreate, InspectionRead, QualitySummary
 from app.services import quality_service
 
 router = APIRouter(tags=["quality"])
 
 
-@router.get("/inspections", response_model=list[InspectionRead])
+@router.get("/inspections", response_model=Page[InspectionRead])
 def list_inspections(
     session: DbSession,
     _: CurrentUser,
+    paging: Paging,
     batch_id: int | None = Query(None, gt=0),
     result: InspectionResult | None = None,
-    limit: int = Query(200, ge=1, le=1000),
-) -> list[InspectionRead]:
-    rows = quality_service.list_inspections(session, batch_id=batch_id, result=result, limit=limit)
-    return [quality_service.to_read(i) for i in rows]
+) -> Page[InspectionRead]:
+    page = quality_service.list_inspections(session, paging, batch_id=batch_id, result=result)
+    return Page[InspectionRead].from_result(page, paging, quality_service.to_read)
 
 
 @router.post("/inspections", response_model=InspectionRead, status_code=status.HTTP_201_CREATED)

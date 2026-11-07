@@ -23,7 +23,7 @@ def test_machine_state_transitions_are_enforced_and_logged(
     assert _set(client, operator, machine, "STOPPED").json()["status"] == "STOPPED"  # type: ignore[attr-defined]
     assert _set(client, operator, machine, "IDLE").json()["status"] == "IDLE"  # type: ignore[attr-defined]
 
-    events = client.get(f"/api/v1/machines/{machine}/events", headers=operator).json()
+    events = client.get(f"/api/v1/machines/{machine}/events", headers=operator).json()["items"]
     assert [e["new_state"] for e in events] == ["IDLE", "STOPPED", "FAULT", "RUNNING"]
     assert events[2]["severity"] == "CRITICAL"  # the FAULT entry
 

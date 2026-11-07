@@ -71,7 +71,8 @@ def test_investigation_lifecycle_and_validation(
     ).json()
     assert closed["status"] == "CLOSED" and closed["closed_at"] is not None
     assert client.post(url, json={"status": "OPEN"}, headers=engineer).status_code == 422
-    assert len(client.get("/api/v1/investigations", headers=operator).json()) == 1
+    listed = client.get("/api/v1/investigations", headers=operator).json()
+    assert listed["total"] == 1 and len(listed["items"]) == 1
 
 
 def test_evidence_rows_keep_sql_column_order(

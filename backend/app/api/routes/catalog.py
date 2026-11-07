@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, status
 
-from app.api.deps import CurrentUser, DbSession, Engineer, Operator
+from app.api.deps import CurrentUser, DbSession, Engineer, Operator, Paging
 from app.schemas.catalog import (
     DefectTypeRead,
     MachineCreate,
@@ -13,6 +13,7 @@ from app.schemas.catalog import (
     ProductRead,
     ProductUpdate,
 )
+from app.schemas.common import Page
 from app.services import catalog_service
 
 router = APIRouter(tags=["catalog"])
@@ -65,12 +66,12 @@ def change_machine_status(
     return MachineRead.model_validate(machine)
 
 
-@router.get("/machines/{machine_id}/events", response_model=list[MachineEventRead])
+@router.get("/machines/{machine_id}/events", response_model=Page[MachineEventRead])
 def list_machine_events(
-    session: DbSession, _: CurrentUser, machine_id: int, limit: int = Query(100, ge=1, le=500)
-) -> list[MachineEventRead]:
-    events = catalog_service.list_machine_events(session, machine_id, limit=limit)
-    return [MachineEventRead.model_validate(e) for e in events]
+    session: DbSession, _: CurrentUser, machine_id: int, paging: Paging
+) -> Page[MachineEventRead]:
+    result = catalog_service.list_machine_events(session, machine_id, paging)
+    return Page[MachineEventRead].from_result(result, paging, MachineEventRead.model_validate)
 
 
 @router.get("/material-lots", response_model=list[MaterialLotRead])
