@@ -24,11 +24,24 @@ if TYPE_CHECKING:
 
 
 class Alert(Base):
+    """A notification for the dashboard; audit rows that outlive what they reference.
+
+    ``machine_id`` is set by the simulation and the batch quarantine;
+    ``production_order_id`` is set by the ORDER_OVERDUE check, which also uses
+    it to find the open alert for an order. Both are SET NULL on delete.
+    """
+
     __tablename__ = "alerts"
-    __table_args__ = (Index("ix_alerts_created", "created_at", "id"),)
+    __table_args__ = (
+        Index("ix_alerts_created", "created_at", "id"),
+        Index("ix_alerts_production_order", "production_order_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     machine_id: Mapped[int | None] = mapped_column(ForeignKey("machines.id", ondelete="SET NULL"))
+    production_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("production_orders.id", ondelete="SET NULL", name="fk_alerts_production_order")
+    )
     alert_type: Mapped[AlertType] = mapped_column(
         Enum(AlertType, name="alert_type"), nullable=False
     )

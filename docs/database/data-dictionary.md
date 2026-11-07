@@ -2,7 +2,7 @@
 
 One table per entity. MySQL types are copied from `database/schema/schema.sql`, the snapshot exported from the migrated database. "Default" is the database-level default; where the ORM supplies a value at insert time instead (`default=` in `backend/app/models/`), it is listed as "none (ORM: value)" because MySQL itself has no default for that column.
 
-All tables use `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`. The `alembic_version` table (`version_num varchar(32)`, primary key) records the applied migration and is not an application entity.
+All tables use `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci`. The `alembic_version` table (`version_num varchar(32)`, primary key) records the latest applied migration and is not an application entity.
 
 ## users
 
@@ -176,16 +176,17 @@ Junction: defect classifications of a failed inspection.
 
 ## alerts
 
-Notifications raised by the simulation and by quarantine actions.
+Notifications raised by the simulation, by quarantine actions, and by the overdue order check.
 
 | Column | MySQL type | Null | Default | Constraints | Description |
 |--------|------------|------|---------|-------------|-------------|
 | id | int | NO | AUTO_INCREMENT | PRIMARY KEY | Surrogate key |
-| machine_id | int | YES | NULL | FK `machines.id` ON DELETE SET NULL; implicit index `machine_id` | Machine concerned; NULL for lot quarantine alerts |
-| alert_type | enum('HIGH_DEFECT_RATE','MACHINE_FAULT','MATERIAL_QUARANTINE','ORDER_OVERDUE') | NO | none | | Category. `ORDER_OVERDUE` is defined but not raised by current code |
+| machine_id | int | YES | NULL | FK `machines.id` ON DELETE SET NULL; implicit index `machine_id` | Machine concerned; NULL for lot quarantine alerts and for overdue alerts on orders without a machine |
+| production_order_id | int | YES | NULL | FK `production_orders.id` ON DELETE SET NULL (`fk_alerts_production_order`); index `ix_alerts_production_order` | Order concerned; set only by the ORDER_OVERDUE check, which also uses it to find the open alert for an order. Added by revision `383273c26ef7` |
+| alert_type | enum('HIGH_DEFECT_RATE','MACHINE_FAULT','MATERIAL_QUARANTINE','ORDER_OVERDUE') | NO | none | | Category. `ORDER_OVERDUE` is raised by `alert_service.raise_overdue_order_alerts` |
 | severity | enum('INFO','WARNING','CRITICAL') | NO | none | | Severity |
 | message | varchar(255) | NO | none | | Text; services truncate to 255 characters |
-| created_at | datetime | NO | (now()) | leading column of `ix_alerts_created (created_at, id)` | Alert time (the simulation and the quarantine services set it explicitly) |
+| created_at | datetime | NO | (now()) | leading column of `ix_alerts_created (created_at, id)` | Alert time (the simulation and the quarantine services set it explicitly; the overdue check stamps its `as_of`) |
 | acknowledged_at | datetime | YES | NULL | | Set by `acknowledge_alert` |
 | acknowledged_by | int | YES | NULL | FK `users.id` ON DELETE SET NULL; implicit index `acknowledged_by` | Acknowledging user |
 
