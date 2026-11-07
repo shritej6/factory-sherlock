@@ -6,10 +6,12 @@ import { DataTable } from '@/components/ui/DataTable';
 import { Disclosure } from '@/components/ui/Disclosure';
 import { SelectField } from '@/components/ui/Field';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { PageBody, Pagination } from '@/components/ui/Pagination';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ErrorState, InlineNotice, LoadingState } from '@/components/ui/States';
 import { useMachines, useOrders, useProducts } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
+import { usePageState } from '@/hooks/usePageState';
 import type { OrderStatus, ProductionOrder } from '@/types/api';
 import { ORDER_STATUSES } from '@/types/constants';
 import { formatDate, formatNumber, titleCase } from '@/utils/format';
@@ -23,7 +25,8 @@ export function OrdersPage() {
   const [status, setStatus] = useState<OrderStatus | ''>('');
   const [editing, setEditing] = useState<ProductionOrder | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const orders = useOrders(status);
+  const { page, setPage, resetOffset } = usePageState();
+  const orders = useOrders({ status, ...page });
   const products = useProducts();
   const machines = useMachines();
 
@@ -96,7 +99,10 @@ export function OrdersPage() {
         <SelectField
           label="Status filter"
           value={status}
-          onChange={(e) => setStatus(e.target.value as OrderStatus | '')}
+          onChange={(e) => {
+            setStatus(e.target.value as OrderStatus | '');
+            resetOffset();
+          }}
         >
           <option value="">All statuses</option>
           {ORDER_STATUSES.map((s) => (
@@ -119,13 +125,25 @@ export function OrdersPage() {
           </div>
         )}
         {orders.data && (
-          <DataTable
-            columns={columns}
-            rows={orders.data}
-            rowKey={(o) => o.id}
-            caption="Production orders"
-            emptyTitle="No orders match this filter"
-          />
+          <>
+            <PageBody loading={orders.isPlaceholderData}>
+              <DataTable
+                columns={columns}
+                rows={orders.data.items}
+                rowKey={(o) => o.id}
+                caption="Production orders"
+                emptyTitle="No orders match this filter"
+              />
+            </PageBody>
+            <Pagination
+              total={orders.data.total}
+              limit={page.limit}
+              offset={page.offset}
+              onChange={setPage}
+              label="Production orders"
+              className="px-4"
+            />
+          </>
         )}
       </div>
     </>

@@ -6,10 +6,12 @@ import { DataTable } from '@/components/ui/DataTable';
 import { Disclosure } from '@/components/ui/Disclosure';
 import { SelectField } from '@/components/ui/Field';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { PageBody, Pagination } from '@/components/ui/Pagination';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ErrorState, InlineNotice, LoadingState } from '@/components/ui/States';
-import { useBatches, useMachines, useMaterialLots, useOrders } from '@/hooks/queries';
+import { LOOKUP_PAGE, useBatches, useMachines, useMaterialLots, useOrders } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
+import { usePageState } from '@/hooks/usePageState';
 import type { BatchStatus, ProductionBatch } from '@/types/api';
 import { BATCH_STATUSES } from '@/types/constants';
 import { formatDateTime, formatNumber, titleCase } from '@/utils/format';
@@ -29,14 +31,15 @@ export function BatchesPage() {
     ...(orderId ? { order_id: Number(orderId) } : {}),
     ...(machineId ? { machine_id: Number(machineId) } : {}),
   };
-  const batches = useBatches(filters);
-  const orders = useOrders();
+  const { page, setPage, resetOffset } = usePageState();
+  const batches = useBatches({ ...filters, ...page });
+  const orders = useOrders(LOOKUP_PAGE);
   const machines = useMachines();
   const lots = useMaterialLots();
 
-  const visible = batches.data?.filter((b) => !status || b.status === status) ?? [];
+  const visible = batches.data?.items.filter((b) => !status || b.status === status) ?? [];
   const orderNumbers = useMemo(
-    () => new Map(orders.data?.map((o) => [o.id, o.order_number])),
+    () => new Map(orders.data?.items.map((o) => [o.id, o.order_number])),
     [orders.data],
   );
   const machineCodes = useMemo(
@@ -120,9 +123,16 @@ export function BatchesPage() {
         }
       />
       <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3 lg:max-w-3xl">
-        <SelectField label="Order" value={orderId} onChange={(e) => setOrderId(e.target.value)}>
+        <SelectField
+          label="Order"
+          value={orderId}
+          onChange={(e) => {
+            setOrderId(e.target.value);
+            resetOffset();
+          }}
+        >
           <option value="">All orders</option>
-          {orders.data?.map((o) => (
+          {orders.data?.items.map((o) => (
             <option key={o.id} value={o.id}>
               {o.order_number}
             </option>
@@ -131,7 +141,10 @@ export function BatchesPage() {
         <SelectField
           label="Machine"
           value={machineId}
-          onChange={(e) => setMachineId(e.target.value)}
+          onChange={(e) => {
+            setMachineId(e.target.value);
+            resetOffset();
+          }}
         >
           <option value="">All machines</option>
           {machines.data?.map((m) => (
@@ -143,6 +156,7 @@ export function BatchesPage() {
         <SelectField
           label="Status"
           value={status}
+          hint="Applies to the rows on this page."
           onChange={(e) => setStatus(e.target.value as BatchStatus | '')}
         >
           <option value="">All statuses</option>
@@ -174,13 +188,25 @@ export function BatchesPage() {
           </div>
         )}
         {batches.data && (
-          <DataTable
-            columns={columns}
-            rows={visible}
-            rowKey={(b) => b.id}
-            caption="Production batches"
-            emptyTitle="No batches match these filters"
-          />
+          <>
+            <PageBody loading={batches.isPlaceholderData}>
+              <DataTable
+                columns={columns}
+                rows={visible}
+                rowKey={(b) => b.id}
+                caption="Production batches"
+                emptyTitle="No batches match these filters"
+              />
+            </PageBody>
+            <Pagination
+              total={batches.data.total}
+              limit={page.limit}
+              offset={page.offset}
+              onChange={setPage}
+              label="Production batches"
+              className="px-4"
+            />
+          </>
         )}
       </div>
     </>

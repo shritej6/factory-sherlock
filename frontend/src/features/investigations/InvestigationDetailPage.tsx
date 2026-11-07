@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
-import { useBatches, useInvestigation, useMachines } from '@/hooks/queries';
+import { LOOKUP_PAGE, useBatches, useInvestigation, useMachines } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
 import type { Investigation } from '@/types/api';
 
@@ -28,9 +28,10 @@ export function InvestigationDetailPage() {
   const { can } = useAuth();
   const investigation = useInvestigation(investigationId);
   const machines = useMachines();
-  const batches = useBatches(
-    investigation.data?.machine_id ? { machine_id: investigation.data.machine_id } : {},
-  );
+  const batches = useBatches({
+    ...(investigation.data?.machine_id ? { machine_id: investigation.data.machine_id } : {}),
+    ...LOOKUP_PAGE,
+  });
 
   if (!Number.isInteger(investigationId) || investigationId <= 0) {
     return (
@@ -100,7 +101,7 @@ export function InvestigationDetailPage() {
           >
             <FlaggedBatches
               links={data.batch_links}
-              batches={batches.data}
+              batches={batches.data?.items}
               rates={batchRatesFromEvidence(data)}
               canQuarantine={can('batch.quarantine')}
             />
