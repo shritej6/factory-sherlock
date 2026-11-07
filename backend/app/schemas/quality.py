@@ -38,3 +38,11 @@ class QualitySummary(BaseModel):
     passed: int
     failed: int
     defect_rate: float = Field(description="failed / total_inspected, 0 when nothing inspected")
+
+
+class InspectionImportResult(BaseModel):
+    """Outcome of a CSV import. The whole file was recorded or nothing was."""
+
+    imported: int
+    failed_inspections: int
+    inspection_ids: list[int]

@@ -1,10 +1,18 @@
-from fastapi import APIRouter, Query, status
+from typing import Annotated
+
+from fastapi import APIRouter, File, Query, UploadFile, status
 
 from app.api.deps import CurrentUser, DbSession, Operator, Paging
 from app.models.enums import InspectionResult
 from app.schemas.common import Page
-from app.schemas.quality import InspectionCreate, InspectionRead, QualitySummary
-from app.services import quality_service
+from app.schemas.quality import (
+    InspectionCreate,
+    InspectionImportResult,
+    InspectionRead,
+    QualitySummary,
+)
+from app.services import inspection_import, quality_service
+from app.services.inspection_csv import MAX_FILE_BYTES
 
 router = APIRouter(tags=["quality"])
 
@@ -25,6 +33,29 @@ def list_inspections(
 def record_inspection(session: DbSession, _: Operator, body: InspectionCreate) -> InspectionRead:
     inspection = quality_service.record_inspection(session, body)
     return quality_service.to_read(inspection)
+
+
+@router.post(
+    "/inspections/import",
+    response_model=InspectionImportResult,
+    status_code=status.HTTP_201_CREATED,
+    summary="Import inspections from a CSV file",
+    description=(
+        "Multipart upload with one field named `file`: UTF-8 CSV, header row, columns "
+        "`serial_number`, `characteristic`, `measured_value`, optional `inspected_at` and "
+        "`defect_type_codes` (separated by `|`). At most 1 MiB and 5000 data rows. Every row "
+        "is validated first; one invalid row rejects the whole file with 422 and no inspection "
+        "is written."
+    ),
+)
+def import_inspections(
+    session: DbSession, _: Operator, file: Annotated[UploadFile, File()]
+) -> InspectionImportResult:
+    # Read one byte past the limit so the size check cannot be fooled by a larger body.
+    content = file.file.read(MAX_FILE_BYTES + 1)
+    return inspection_import.import_csv(
+        session, content, content_type=file.content_type, filename=file.filename
+    )
 
 
 @router.get("/quality/summary", response_model=QualitySummary)
