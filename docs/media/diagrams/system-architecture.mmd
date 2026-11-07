@@ -3,16 +3,17 @@
 flowchart TB
     subgraph Presentation["Presentation (frontend/)"]
         SPA["React + TypeScript SPA<br/>Vite dev server :5173"]
+        E2E["Playwright e2e tests<br/>(frontend/e2e)"]
     end
 
     subgraph Backend["Backend process (FastAPI, uvicorn)"]
         subgraph API["API layer (app/api)"]
             Routes["Route modules<br/>health, auth, catalog, production, quality,<br/>investigations, traceability, analytics, simulation"]
-            Deps["deps.py<br/>DbSession, CurrentUser, role guards"]
+            Deps["deps.py<br/>DbSession, CurrentUser, role guards, Paging"]
             Errors["errors.py<br/>typed error to HTTP mapping"]
         end
         subgraph Services["Application services (app/services)"]
-            Svc["auth, catalog, production, quality,<br/>traceability, investigation, analytics, simulation"]
+            Svc["auth, catalog, production, quality,<br/>traceability, investigation, analytics, simulation,<br/>alert, inspection_import + inspection_csv"]
         end
         subgraph Domain["Domain (app/domain)"]
             Rules["quality_rules.py<br/>state_machines.py"]
@@ -21,23 +22,26 @@ flowchart TB
             Engine["SimulationEngine<br/>config, faults, measurement, machine_state, events"]
         end
         subgraph Inv["Investigation subsystem (app/investigation)"]
-            InvEngine["investigate()<br/>rules R1 to R6, summary"]
+            InvEngine["investigate()<br/>rules R1 to R7, summary"]
         end
         subgraph Data["Data access"]
             ORM["SQLAlchemy models<br/>(app/models)"]
-            Runner["sql_loader.py + query_runner.py<br/>(app/repositories)"]
+            Runner["sql_loader.py + query_runner.py<br/>+ pagination.py (app/repositories)"]
         end
         subgraph Core["Cross-cutting (app/core)"]
-            Cfg["config, database, security,<br/>clock, logging, exceptions"]
+            Cfg["config, database, security, throttle,<br/>clock, logging, exceptions"]
         end
     end
 
-    Files["database/queries/*.sql<br/>(12 files)"]
+    Jobs["app/jobs/check_overdue_orders.py<br/>(CLI, own session)"]
+    Files["database/queries/*.sql<br/>(14 files)"]
     DB[("MySQL 8<br/>17 tables, Alembic managed")]
 
-    SPA -->|"HTTP JSON + Bearer JWT"| Routes
+    SPA -->|"HTTP JSON or multipart + Bearer JWT"| Routes
+    E2E -.->|"drives the browser"| SPA
     Routes --> Deps
     Routes --> Svc
+    Jobs --> Svc
     Svc --> Rules
     Svc --> Engine
     Svc --> InvEngine
