@@ -61,8 +61,11 @@ Operator = Annotated[User, Depends(require_roles(OPERATOR_ROLES))]
 Engineer = Annotated[User, Depends(require_roles(ENGINEER_ROLES))]
 
 
+MAX_OFFSET = 1_000_000
+
+
 def get_page_params(
-    limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0)
+    limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0, le=MAX_OFFSET)
 ) -> PageParams:
     return PageParams(limit=limit, offset=offset)
 

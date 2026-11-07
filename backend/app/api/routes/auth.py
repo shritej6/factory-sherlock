@@ -9,10 +9,13 @@ from app.services import auth_service
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _client_ip(request: Request) -> str:
-    # The direct peer address is used as is. X-Forwarded-For is ignored because
-    # any client can set it; honouring it would need a trusted proxy list.
-    return request.client.host if request.client is not None else "unknown"
+def _client_ip(request: Request) -> str | None:
+    # request.client is whatever the ASGI server reports. Uvicorn rewrites it
+    # from X-Forwarded-For when the peer is in its trusted proxy list, which by
+    # default is loopback, so a client connecting locally could choose its own
+    # address. The project therefore starts uvicorn with --no-proxy-headers
+    # (see SECURITY.md). None (no peer address) skips the address throttle.
+    return request.client.host if request.client is not None else None
 
 
 @router.post(

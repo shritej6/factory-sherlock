@@ -44,7 +44,7 @@ check-overdue: ## Raise ORDER_OVERDUE alerts for open production orders past the
 	cd $(BACKEND_DIR) && $(UV) run python -m app.jobs.check_overdue_orders
 
 backend: ## Run the FastAPI server with reload
-	cd $(BACKEND_DIR) && $(UV) run uvicorn app.main:app --reload
+	cd $(BACKEND_DIR) && $(UV) run uvicorn app.main:app --reload --no-proxy-headers
 
 frontend: ## Run the Vite dev server
 	cd $(FRONTEND_DIR) && $(PNPM) dev

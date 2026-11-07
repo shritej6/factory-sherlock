@@ -15,7 +15,7 @@ from app.services import analytics_service, catalog_service
 from fastapi.testclient import TestClient
 from httpx import Response
 from sqlalchemy import create_engine
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import DataError, IntegrityError, OperationalError, TimeoutError
 from sqlalchemy.orm import Session, sessionmaker
 
 ERROR_KEYS = {"error", "message", "details", "request_id"}
@@ -71,15 +71,30 @@ def test_database_unavailable_returns_503_for_health_and_protected_routes(
     _assert_safe_error_body(protected, 503, "DatabaseUnavailable")
 
 
-def _raise_operational(code: int):  # type: ignore[no-untyped-def]
+def _raise_operational(code: int, message: str = "Deadlock found when trying to get lock"):  # type: ignore[no-untyped-def]
     def fail(*args: object, **kwargs: object) -> object:
         raise OperationalError(
             "UPDATE production_orders SET quantity_completed = 1",
             {},
-            pymysql.err.OperationalError(code, "Deadlock found when trying to get lock"),
+            pymysql.err.OperationalError(code, message),
         )
 
     return fail
+
+
+def _raise_data(code: int):  # type: ignore[no-untyped-def]
+    def fail(*args: object, **kwargs: object) -> object:
+        raise DataError(
+            "INSERT INTO inspections (serial_number) VALUES ('x')",
+            {},
+            pymysql.err.DataError(code, "Data too long for column 'serial_number' at row 1"),
+        )
+
+    return fail
+
+
+def _raise_pool_timeout(*args: object, **kwargs: object) -> object:
+    raise TimeoutError("QueuePool limit of size 5 overflow 10 reached")
 
 
 def _raise_integrity(code: int):  # type: ignore[no-untyped-def]
@@ -146,3 +161,50 @@ def test_every_client_error_body_has_the_documented_keys_and_no_internals(
     }
     for status, response in responses.items():
         _assert_safe_error_body(response, status, expected_errors[status])
+
+
+def test_check_constraint_violation_from_the_database_is_a_422_with_the_constraint_name(
+    client: TestClient, engineer: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        analytics_service,
+        "recent_alerts",
+        _raise_operational(3819, "Check constraint 'chk_alerts_severity' is violated."),
+    )
+    response = client.get("/api/v1/analytics/alerts", headers=engineer)
+    body = _assert_safe_error_body(response, 422, "ValidationError")
+    assert body["message"] == "A database check constraint rejected the change"
+    assert body["details"] == {"constraint": "chk_alerts_severity"}
+
+
+def test_data_too_long_is_a_422_and_other_data_errors_are_generic_500s(
+    tolerant_client: TestClient, engineer: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(analytics_service, "recent_alerts", _raise_data(1406))
+    response = tolerant_client.get("/api/v1/analytics/alerts", headers=engineer)
+    body = _assert_safe_error_body(response, 422, "ValidationError")
+    assert body["message"] == "A value is too long for its column"
+    assert "serial_number" not in response.text
+
+    monkeypatch.setattr(analytics_service, "recent_alerts", _raise_data(1366))
+    response = tolerant_client.get("/api/v1/analytics/alerts", headers=engineer)
+    body = _assert_safe_error_body(response, 500, "InternalError")
+    assert body["message"] == "An unexpected error occurred"
+
+
+def test_other_operational_errors_are_503_unavailable_and_pool_timeouts_not_reachable(
+    client: TestClient, engineer: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        analytics_service, "recent_alerts", _raise_operational(1040, "Too many connections")
+    )
+    response = client.get("/api/v1/analytics/alerts", headers=engineer)
+    body = _assert_safe_error_body(response, 503, "DatabaseUnavailable")
+    assert body["message"] == "The database is unavailable"
+    assert "Too many connections" not in response.text
+
+    monkeypatch.setattr(analytics_service, "recent_alerts", _raise_pool_timeout)
+    response = client.get("/api/v1/analytics/alerts", headers=engineer)
+    body = _assert_safe_error_body(response, 503, "DatabaseUnavailable")
+    assert body["message"] == "The database is not reachable"
+    assert "QueuePool" not in response.text

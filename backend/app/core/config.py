@@ -36,8 +36,9 @@ class Settings(BaseSettings):
     jwt_access_token_minutes: int = 120
     jwt_algorithm: str = "HS256"
 
-    # Failed logins allowed per username and per client address within one
-    # sliding window before further attempts are rejected with 429.
+    # Failed logins allowed per account within one sliding window before further
+    # attempts are rejected with 429; the same number of failures per client
+    # address turns later failed attempts from that address into 429 as well.
     login_max_failures: int = Field(default=5, ge=1)
     login_window_seconds: int = Field(default=900, ge=1)
 

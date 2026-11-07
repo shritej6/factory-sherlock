@@ -74,7 +74,15 @@ def test_offset_past_the_end_returns_empty_items_with_total(
 
 
 @pytest.mark.parametrize(
-    "params", [{"limit": 0}, {"limit": 501}, {"limit": -1}, {"offset": -1}, {"limit": "ten"}]
+    "params",
+    [
+        {"limit": 0},
+        {"limit": 501},
+        {"limit": -1},
+        {"offset": -1},
+        {"offset": 1_000_001},
+        {"limit": "ten"},
+    ],
 )
 def test_invalid_paging_values_are_rejected(
     client: TestClient, viewer: dict[str, str], ids: Ids, params: dict[str, object]
@@ -134,3 +142,11 @@ def test_batch_and_inspection_filters_combine_with_paging(
     all_inspections = _page(client, viewer, "/api/v1/inspections", limit=1)
     assert all_inspections["total"] == simulated["inspections_created"]
     assert all_inspections["total"] > failed["total"]
+
+
+def test_offset_at_the_upper_bound_is_accepted(
+    client: TestClient, engineer: dict[str, str], ids: Ids
+) -> None:
+    _create_orders(client, engineer, ids, 1)
+    body = _page(client, engineer, "/api/v1/production-orders", limit=10, offset=1_000_000)
+    assert body == {"items": [], "total": 1, "limit": 10, "offset": 1_000_000}

@@ -32,7 +32,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `uv run uvicorn app.main:app --host 127.0.0.1 --port ${apiPort}`,
+      command: `uv run uvicorn app.main:app --host 127.0.0.1 --port ${apiPort} --no-proxy-headers`,
       cwd: '../backend',
       url: `http://127.0.0.1:${apiPort}/api/v1/health`,
       reuseExistingServer: !isCI,

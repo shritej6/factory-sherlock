@@ -103,8 +103,10 @@ The seed applies `database/seeds/01_reference_data.sql` (idempotent `INSERT ... 
 
 ```bash
 cd backend
-uv run uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 8000 --no-proxy-headers
 ```
+
+`--no-proxy-headers` makes uvicorn keep the TCP peer as `request.client` instead of rewriting it from `X-Forwarded-For`. The login throttle counts failures per client address, and uvicorn's default trusts that header from loopback, which is where the Vite proxy connects from. See `SECURITY.md`, "Login throttling".
 
 - API root: `http://127.0.0.1:8000/api/v1`
 - Interactive docs: `http://127.0.0.1:8000/api/docs`
@@ -177,7 +179,7 @@ pnpm test:e2e
 pnpm test:e2e:report                    # HTML report of the last run
 ```
 
-`frontend/playwright.config.ts` starts the servers itself: the backend with `uv run uvicorn app.main:app --host 127.0.0.1 --port 8013` (from `backend/`) and the Vite dev server on port 5183 with its `/api` proxy pointed at port 8013 (`VITE_API_PROXY_TARGET`), so a development session on ports 8000 and 5173 is not disturbed. Locally a server already listening on 8013 or 5183 is reused; with `CI=1` fresh servers are always started. The password of the demo accounts comes from `E2E_PASSWORD` when set, otherwise from `SEED_DEMO_PASSWORD` in the repository `.env` (`frontend/e2e/support/env.ts`); it is never printed or written to the report. Each run leaves one closed investigation and one quarantined material lot behind; `make reset-demo` restores the demo state. `frontend/e2e/README.md` lists the variables (`E2E_BASE_URL`, `E2E_API_PORT`, `E2E_BROWSER_CHANNEL`, `CI`) and what the tests assume about the demo data. In CI the `End-to-End` workflow (`.github/workflows/e2e.yml`) runs the same command against a MySQL 8.4 service container.
+`frontend/playwright.config.ts` starts the servers itself: the backend with `uv run uvicorn app.main:app --host 127.0.0.1 --port 8013 --no-proxy-headers` (from `backend/`) and the Vite dev server on port 5183 with its `/api` proxy pointed at port 8013 (`VITE_API_PROXY_TARGET`), so a development session on ports 8000 and 5173 is not disturbed. Locally a server already listening on 8013 or 5183 is reused; with `CI=1` fresh servers are always started. The password of the demo accounts comes from `E2E_PASSWORD` when set, otherwise from `SEED_DEMO_PASSWORD` in the repository `.env` (`frontend/e2e/support/env.ts`); it is never printed or written to the report. Each run leaves one closed investigation and one quarantined material lot behind; `make reset-demo` restores the demo state. `frontend/e2e/README.md` lists the variables (`E2E_BASE_URL`, `E2E_API_PORT`, `E2E_BROWSER_CHANNEL`, `CI`) and what the tests assume about the demo data. In CI the `End-to-End` workflow (`.github/workflows/e2e.yml`) runs the same command against a MySQL 8.4 service container.
 
 ## 11. Render the Mermaid diagrams
 
