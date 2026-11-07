@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from 'react-router';
 
 import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -28,7 +29,7 @@ export function AlertsList({ alerts }: { alerts: Alert[] }) {
     return (
       <EmptyState
         title="No alerts recorded"
-        hint="Alerts appear when rules detect high defect rates, faults, or quarantines."
+        hint="Alerts appear when rules detect high defect rates, faults, quarantines, or overdue orders."
       />
     );
   }
@@ -45,7 +46,21 @@ export function AlertsList({ alerts }: { alerts: Alert[] }) {
                 <span className="text-xs text-ink-muted">{titleCase(alert.alert_type)}</span>
                 <span className="text-xs text-ink-faint">{formatDateTime(alert.created_at)}</span>
               </div>
-              <p className="mt-1 text-sm text-ink">{alert.message}</p>
+              <p className="mt-1 text-sm text-ink">
+                {alert.message}
+                {alert.production_order_id !== null && (
+                  <>
+                    {' '}
+                    <Link
+                      to="/orders"
+                      className="text-xs text-accent hover:underline"
+                      aria-label={`Open orders for alert ${alert.id}`}
+                    >
+                      View orders
+                    </Link>
+                  </>
+                )}
+              </p>
             </div>
             {alert.acknowledged_at ? (
               <span className="text-xs text-ink-faint">

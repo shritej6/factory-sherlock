@@ -1,4 +1,10 @@
-import { keepPreviousData, useQueries, useQuery } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type { UseQueryResult } from '@tanstack/react-query';
 
 import {
@@ -112,6 +118,18 @@ export const useAlerts = (page: PageParams = {}) =>
     queryFn: () => analyticsApi.alerts(page),
     placeholderData: keepPreviousData,
   });
+
+/**
+ * Runs the overdue order check. Every alert page shares the `alerts` root key, so
+ * invalidating it refreshes whichever page the Overview is showing.
+ */
+export const useCheckOverdueOrders = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: analyticsApi.checkOverdueOrders,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: queryKeys.alerts }),
+  });
+};
 
 export const useQueryCatalog = () =>
   useQuery({ queryKey: queryKeys.catalog, queryFn: analyticsApi.catalog });

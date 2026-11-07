@@ -284,11 +284,19 @@ export interface Investigation {
 export interface Alert {
   id: number;
   machine_id: number | null;
+  production_order_id: number | null;
   alert_type: AlertType;
   severity: Severity;
   message: string;
   created_at: string;
   acknowledged_at: string | null;
+}
+
+/** Outcome of POST /analytics/alerts/checks/overdue-orders: overdue open orders and new alerts. */
+export interface OverdueCheckResponse {
+  checked: number;
+  raised: number;
+  alerts: Alert[];
 }
 
 export interface ForwardTraceRow extends ResultRow {

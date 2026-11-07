@@ -63,7 +63,7 @@ export function InvestigationsPage() {
     <>
       <PageHeader
         title="Investigations"
-        description="Each case runs six rules against the database and keeps the SQL and rows as evidence."
+        description="Each case runs seven rules against the database and keeps the SQL and rows as evidence."
         actions={
           can('investigation.manage') && (
             <Disclosure label="Open investigation">

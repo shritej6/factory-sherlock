@@ -19,6 +19,7 @@ import type {
   MaterialLot,
   OrderListParams,
   OrderStatus,
+  OverdueCheckResponse,
   Page,
   PageParams,
   Product,
@@ -124,6 +125,12 @@ export const analyticsApi = {
   alerts: (page: PageParams = {}) => request<Page<Alert>>('/analytics/alerts', { query: page }),
   acknowledgeAlert: (id: number) =>
     request<Alert>(`/analytics/alerts/${id}/acknowledge`, { method: 'POST' }),
+  /** The empty body lets the server judge due dates against its own clock. */
+  checkOverdueOrders: () =>
+    request<OverdueCheckResponse>('/analytics/alerts/checks/overdue-orders', {
+      method: 'POST',
+      body: {},
+    }),
 };
 
 export const simulationApi = {
