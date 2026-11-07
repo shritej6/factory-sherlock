@@ -41,3 +41,7 @@ Negative or accepted costs:
 - SQLite for development with MySQL in production. Rejected: the query files rely on MySQL-only syntax and the point of the project is to exercise the real engine.
 - A separate analytical store or materialised dashboard tables. Rejected: data volumes are small, and keeping analytics as live SQL over the operational schema is what makes the evidence cards reproducible.
 - Storing evidence as references to queries only (no stored rows). Rejected: investigations must remain readable after the data changes, and reviewers need to see what the engine saw.
+
+## Update (2026-11-07)
+
+The decision stands. The counts above are historical: the catalogue now holds fourteen query files (ten numbered dashboard and traceability queries, four under `investigation/`), the schema is created by three Alembic revisions (`3a5e982c3679`, `383273c26ef7`, `6c1f0d2a9b47`) and still has 17 tables, and both deployment options now write out the full MySQL 8.4 default `sql_mode`, which adds `ONLY_FULL_GROUP_BY` and `NO_ENGINE_SUBSTITUTION` to the list in the Decision section. Migration `6c1f0d2a9b47` added `ix_inspections_time_id`, `ix_inspections_spec_time`, `ix_production_batches_started_id`, `ix_production_orders_created_id`, and `ix_investigations_created_id` for the paginated list orderings and the control chart window; the EXPLAIN observations are in `docs/database/database-design.md` section 6.

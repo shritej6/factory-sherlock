@@ -1,9 +1,9 @@
 # Frontend continuous integration.
 #
-# The frontend is being built concurrently with the rest of the repository.
-# This workflow only triggers on changes under frontend/ (see the paths filter)
-# and every build step additionally checks that frontend/package.json exists,
-# so the job passes as a no-op on a checkout that has no frontend yet.
+# The frontend under frontend/ is complete (React 19, TypeScript, Vite 7).
+# This workflow only triggers on changes under frontend/ (see the paths filter).
+# Every build step still checks that frontend/package.json exists so the job
+# passes as a no-op on a branch that removes the directory.
 # It assumes the package.json scripts lint, format:check, typecheck, test, and
 # build exist, and that pnpm-lock.yaml is committed (installs are always frozen).
 name: Frontend CI

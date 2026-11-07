@@ -32,7 +32,7 @@ Commits follow the Conventional Commits format: `type(scope): summary`, written 
 
 Types in use: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`, `db`, `perf`.
 
-Scopes in use: `api`, `db`, `simulation`, `investigation`, `queries`, `seed`, `frontend`, `docs`, `ci`.
+Scopes in use: `api`, `auth`, `alerts`, `catalog`, `import`, `db`, `schema`, `simulation`, `investigation`, `queries`, `seed`, `frontend`, `e2e`, `backend`, `architecture`, `docs`, `ci`.
 
 Examples:
 
@@ -78,13 +78,14 @@ A pull request is ready for review only when all of the following hold. CI enfor
 | New code is tested        | Unit tests for rules and services, API tests for endpoints, integration tests for SQL  |
 | Lint passes               | `uv run ruff check .` and `uv run ruff format --check .` in `backend/`                 |
 | Type check                | `uv run mypy app` in `backend/` (blocking in CI)                                        |
-| Frontend checks           | `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` in `frontend/`                |
+| Frontend checks           | `pnpm lint`, `pnpm format:check`, `pnpm typecheck`, `pnpm test`, `pnpm build` in `frontend/` |
 | No secrets                | `.env` is ignored by Git; nothing in the diff contains credentials or tokens            |
 | Migrations are reversible | Every revision has a working `downgrade()`, tested with `alembic downgrade -1`          |
-| Documentation checked     | `make check-docs` passes; affected files under `docs/` updated                          |
+| Documentation checked     | `make check-docs` passes; affected files under `docs/`, `README.md`, and `CHANGELOG.md` updated |
+| Generated files current   | `make export-schema` after a migration and `make export-openapi` after a route or schema change; commit the regenerated `database/schema/schema.sql` and `docs/api/openapi.json` |
 | End-to-end (optional locally) | `pnpm test:e2e` in `frontend/` against a seeded demo database; the `End-to-End` workflow runs it in CI |
 
-The `Makefile` wraps these commands: `make lint`, `make test-backend`, `make test-frontend`, `make check-docs`. `make help` lists every target, including `make check-overdue` (the overdue order check) and `make benchmark-sim` (the simulation persistence benchmark), which are operational commands rather than gates.
+The `Makefile` wraps these commands: `make lint`, `make test-backend`, `make test-frontend`, `make check-docs`, `make export-schema`, `make export-openapi`. `make help` lists every target, including `make check-overdue` (the overdue order check) and `make benchmark-sim` (the simulation persistence benchmark), which are operational commands rather than gates.
 
 ## Running the project
 

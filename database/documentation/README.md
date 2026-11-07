@@ -27,7 +27,7 @@ database/
 
 ### Migrations are authoritative
 
-The schema is defined by the ORM models in `backend/app/models/` and created by the Alembic migrations in `backend/migrations/versions/`: `20261104_0106_create_manufacturing_schema.py` (revision `3a5e982c3679`, the 17 tables) and `20261107_2106_link_alerts_to_production_orders.py` (revision `383273c26ef7`, which adds `alerts.production_order_id` with the index `ix_alerts_production_order` and the named foreign key `fk_alerts_production_order`). `alembic upgrade head` is the only supported way to create or change tables. The `alembic_version` table in the database records the applied revision.
+The schema is defined by the ORM models in `backend/app/models/` and created by the Alembic migrations in `backend/migrations/versions/`: `20261104_0106_create_manufacturing_schema.py` (revision `3a5e982c3679`, the 17 tables), `20261107_2106_link_alerts_to_production_orders.py` (revision `383273c26ef7`, which adds `alerts.production_order_id` with the index `ix_alerts_production_order` and the named foreign key `fk_alerts_production_order`), and `20261107_2210_add_list_ordering_indexes.py` (revision `6c1f0d2a9b47`, which adds `ix_inspections_time_id`, `ix_inspections_spec_time`, `ix_production_batches_started_id`, `ix_production_orders_created_id`, and `ix_investigations_created_id`, and drops the implicit single-column `specification_id` index on `inspections` that the composite index replaces). `alembic upgrade head` is the only supported way to create or change tables. The `alembic_version` table in the database records the applied revision.
 
 ### `schema/schema.sql` is generated
 

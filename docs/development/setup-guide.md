@@ -8,7 +8,7 @@ Verified against the scripts and configuration in this repository: `.env.example
 |------|---------|-------|
 | Python | 3.12 or later | `requires-python = ">=3.12"`; the code uses PEP 695 generics (`def assert_transition[S]`) and `enum.StrEnum`. |
 | uv | current | Installs dependencies into `backend/.venv` from `uv.lock` and runs every backend command (`uv run ...`). Install from https://docs.astral.sh/uv/. |
-| Node.js | 20 or later | Required by Vite 7, Vitest 3, and ESLint 9. |
+| Node.js | 20 or later | Required by Vite 7, Vitest 4, and ESLint 9. |
 | pnpm | current | `frontend/pnpm-lock.yaml` is the lock file. Enable with `corepack enable pnpm` or install separately. |
 | MySQL 8 server | 8.0.14 or later (8.4 recommended) | Query 06 uses LATERAL derived tables (8.0.14+); `docker-compose.yml` pins `mysql:8.4`. Either a local `mysqld` binary (Homebrew `brew install mysql`, or the Anaconda distribution) run through `scripts/development/local_mysql.sh`, or Docker with Compose. |
 | MySQL client tools | matching | `mysql` and `mysqladmin` are used by the scripts; `mysqldump` by `export_schema.sh`. |
@@ -33,7 +33,7 @@ Edit `.env`. Every variable:
 | `MYSQL_ROOT_PASSWORD` | `change-me-root` | `docker-compose.yml` only | Root password of the Docker MySQL container. Not read by the application; the local script initialises root without a password. |
 | `JWT_SECRET_KEY` | placeholder | backend | HS256 signing key. Generate with `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Login fails with a 500 `InternalError` if it is empty. |
 | `JWT_ACCESS_TOKEN_MINUTES` | `120` | backend | Token lifetime. |
-| `LOGIN_MAX_FAILURES` | `5` | backend | Failed logins allowed per username and per client address before `POST /auth/login` returns 429. |
+| `LOGIN_MAX_FAILURES` | `5` | backend | Failed logins allowed per account inside the window before `POST /auth/login` returns 429. The same count per client address turns further failed attempts from that address into 429; a correct password is never blocked by the address alone. |
 | `LOGIN_WINDOW_SECONDS` | `900` | backend | Length of the sliding window for `LOGIN_MAX_FAILURES`. Counted in memory per API process. |
 | `SEED_DEMO_PASSWORD` | `change-me-demo` | `app.seed` | Password for the four demo accounts (`admin`, `engineer`, `operator`, `viewer`). The seed refuses to run without it. |
 | `CORS_ORIGINS` | `http://localhost:5173` | backend | Comma-separated browser origins allowed to call the API. |
@@ -87,7 +87,7 @@ uv sync                        # creates .venv from uv.lock
 uv run alembic upgrade head    # creates the 17 tables in MYSQL_DATABASE
 ```
 
-Alembic reads the connection URL from the application settings (`migrations/env.py`), so it always targets the database the backend will use. There are two migrations, applied in order by `alembic upgrade head`: `migrations/versions/20261104_0106_create_manufacturing_schema.py` (revision `3a5e982c3679`, the 17 tables) and `migrations/versions/20261107_2106_link_alerts_to_production_orders.py` (revision `383273c26ef7`, which adds `alerts.production_order_id` with its index and foreign key). Both have a working `downgrade()`.
+Alembic reads the connection URL from the application settings (`migrations/env.py`), so it always targets the database the backend will use. There are three migrations, applied in order by `alembic upgrade head`: `migrations/versions/20261104_0106_create_manufacturing_schema.py` (revision `3a5e982c3679`, the 17 tables), `migrations/versions/20261107_2106_link_alerts_to_production_orders.py` (revision `383273c26ef7`, which adds `alerts.production_order_id` with its index and foreign key), and `migrations/versions/20261107_2210_add_list_ordering_indexes.py` (revision `6c1f0d2a9b47`, which adds the five list-ordering and control-chart indexes). All three have a working `downgrade()`.
 
 ## 4. Seed reference data and the demo scenario
 
@@ -165,7 +165,7 @@ cd backend
 uv run ruff check . && uv run ruff format --check . && uv run mypy app
 APP_ENV=test uv run pytest
 cd ../frontend
-pnpm lint && pnpm typecheck && pnpm test
+pnpm lint && pnpm format:check && pnpm typecheck && pnpm test
 ```
 
 See `docs/testing/testing-strategy.md` for the test layout and database isolation. `make lint`, `make test-backend`, `make test-frontend`, and `make check-docs` wrap the commands above.
@@ -209,7 +209,7 @@ Runs `scripts/development/benchmark_simulation.py` from `backend/`. It needs a m
 make check-overdue
 ```
 
-Equivalent to `cd backend && uv run python -m app.jobs.check_overdue_orders`; add `--as-of 2026-11-07T08:00:00` to judge due dates against another moment. The job raises one `ORDER_OVERDUE` alert per `PLANNED`, `RELEASED`, or `IN_PROGRESS` order whose `due_date` is before the check date and that has no unacknowledged overdue alert yet (`alert_service.raise_overdue_order_alerts`, rules BR-100 to BR-104 in `docs/requirements/business-rules.md`), commits, logs `checked`, `raised`, and `alert_ids` as one JSON line, and exits 0. It is idempotent, so a scheduler can run it as often as wanted. The same check is available to operators, engineers, and admins as `POST /api/v1/analytics/alerts/checks/overdue-orders` with an optional `{"as_of": "..."}` body. On the demo data the order that query 02 labels `OVERDUE` (the CNC-02 order left `IN_PROGRESS` by the simulated downtime) is the one that receives an alert.
+Equivalent to `cd backend && uv run python -m app.jobs.check_overdue_orders`; add `--as-of 2026-11-07T08:00:00` only to replay a check for a past moment. The job raises one `ORDER_OVERDUE` alert per `PLANNED`, `RELEASED`, or `IN_PROGRESS` order whose `due_date` is before the check date and that has no unacknowledged overdue alert yet (`alert_service.raise_overdue_order_alerts`, rules BR-100 to BR-104 in `docs/requirements/business-rules.md`), commits, logs `checked`, `raised`, and `alert_ids` as one JSON line, and exits 0; on any error it rolls back, logs the exception under `operation=check_overdue_orders`, and exits 1. It is idempotent, so a scheduler can run it as often as wanted; nothing in the repository schedules it. The same check is available to operators, engineers, and admins as `POST /api/v1/analytics/alerts/checks/overdue-orders`, which takes no body and always uses the server clock. On the demo data the order that query 02 labels `OVERDUE` (the CNC-02 order left `IN_PROGRESS` by the simulated downtime) is the one that receives an alert.
 
 ## Troubleshooting
 
