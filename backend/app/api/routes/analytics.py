@@ -4,12 +4,7 @@ from fastapi import APIRouter, Query
 
 from app.api.deps import CurrentUser, DbSession, Operator, Paging
 from app.core.clock import now
-from app.schemas.analytics import (
-    OverdueCheckRequest,
-    OverdueCheckResponse,
-    QueryCatalogEntry,
-    QueryResult,
-)
+from app.schemas.analytics import OverdueCheckResponse, QueryCatalogEntry, QueryResult
 from app.schemas.common import Page
 from app.schemas.investigation import AlertRead
 from app.services import alert_service, analytics_service
@@ -68,12 +63,14 @@ def acknowledge_alert(session: DbSession, user: Operator, alert_id: int) -> Aler
 
 
 @router.post("/alerts/checks/overdue-orders", response_model=OverdueCheckResponse)
-def check_overdue_orders(
-    session: DbSession, _: Operator, body: OverdueCheckRequest | None = None
-) -> OverdueCheckResponse:
-    """Raise ORDER_OVERDUE alerts for open orders past their due date; safe to repeat."""
-    as_of = body.as_of if body is not None else None
-    result = alert_service.raise_overdue_order_alerts(session, as_of=as_of)
+def check_overdue_orders(session: DbSession, _: Operator) -> OverdueCheckResponse:
+    """Raise ORDER_OVERDUE alerts for open orders past their due date; safe to repeat.
+
+    The check takes no body: due dates are judged against the server clock,
+    so a client cannot choose the check date. Replaying a past check is a
+    command line operation (``app.jobs.check_overdue_orders --as-of``).
+    """
+    result = alert_service.raise_overdue_order_alerts(session)
     return OverdueCheckResponse(
         checked=result.checked,
         raised=result.raised,

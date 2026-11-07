@@ -40,6 +40,8 @@ seed-demo: ## Load reference data, demo accounts, and run the demo simulation sc
 reset-demo: ## Drop all tables, re-run migrations, and seed the demo scenario
 	cd $(BACKEND_DIR) && $(UV) run python ../scripts/development/reset_database.py --demo
 
+# Exits 0 after committing (counts logged as one JSON line) and 1 after rolling back on
+# any error (logged with the traceback). Add -- --as-of <ISO 8601> only to replay a past check.
 check-overdue: ## Raise ORDER_OVERDUE alerts for open production orders past their due date
 	cd $(BACKEND_DIR) && $(UV) run python -m app.jobs.check_overdue_orders
 
