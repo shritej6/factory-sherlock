@@ -17,6 +17,7 @@ import {
 import { FAIL_COLOR, PASS_COLOR, STATUS_SERIES_COLORS } from '@/utils/chartTheme';
 import { toApiDateTime } from '@/utils/format';
 
+import { ControlChartPanel } from './ControlChartPanel';
 import { SqlExplorer } from './SqlExplorer';
 import type { TimeWindow } from './WindowControls';
 import { WindowControls } from './WindowControls';
@@ -84,6 +85,7 @@ export function AnalyticsPage() {
           />
         )}
       </div>
+      <ControlChartPanel window={window} />
       <SqlExplorer defaultWindow={window} />
     </>
   );

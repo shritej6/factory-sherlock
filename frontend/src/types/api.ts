@@ -66,6 +66,17 @@ export interface Specification {
   unit: string;
 }
 
+/** One specification with its product code, as served by GET /specifications for pickers. */
+export interface SpecificationListItem {
+  id: number;
+  product_id: number;
+  product_code: string;
+  characteristic: string;
+  target_value: string;
+  tolerance: string;
+  unit: string;
+}
+
 export interface Product {
   id: number;
   code: string;
@@ -340,6 +351,7 @@ export interface QueryCatalogEntry {
 }
 
 export interface QueryParams {
+  specification_id?: number;
   window_start?: string;
   window_end?: string;
   machine_id?: number;

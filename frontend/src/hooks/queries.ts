@@ -33,6 +33,7 @@ export const queryKeys = {
   machineEvents: (id: number) => ['machines', id, 'events'] as const,
   machineEventPage: (id: number, page: PageParams) => ['machines', id, 'events', page] as const,
   products: ['products'] as const,
+  specifications: ['specifications'] as const,
   materialLots: ['material-lots'] as const,
   defectTypes: ['defect-types'] as const,
   orders: (params: OrderListParams) => ['orders', params] as const,
@@ -53,6 +54,8 @@ export const useMachines = () =>
   useQuery({ queryKey: queryKeys.machines, queryFn: catalogApi.machines });
 export const useProducts = () =>
   useQuery({ queryKey: queryKeys.products, queryFn: catalogApi.products });
+export const useSpecifications = () =>
+  useQuery({ queryKey: queryKeys.specifications, queryFn: catalogApi.specifications });
 export const useMaterialLots = () =>
   useQuery({ queryKey: queryKeys.materialLots, queryFn: catalogApi.materialLots });
 export const useDefectTypes = () =>

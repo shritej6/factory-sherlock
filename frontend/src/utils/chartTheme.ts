@@ -4,6 +4,8 @@ export const SERIES_COLORS = ['#2f6db5', '#3b8f5f', '#b7791f', '#8a5fb5', '#c255
 export const PASS_COLOR = '#3b8f5f';
 export const FAIL_COLOR = '#c2553f';
 export const REFERENCE_COLOR = '#8b949e';
+/** Specification limits on the control chart, kept apart from the grey control limits. */
+export const SPEC_LIMIT_COLOR = '#b7791f';
 export const GRID_COLOR = 'rgba(128, 136, 148, 0.25)';
 /** Read at render through the CSS variable so axes follow the active theme. */
 export const AXIS_COLOR = 'var(--color-ink-muted)';
