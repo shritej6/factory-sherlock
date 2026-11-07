@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { useMachines, useQualitySummary } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
-import { formatDateTime, formatNumber, formatPercent } from '@/utils/format';
+import { formatDateTime, formatNumber, formatPercent, titleCase } from '@/utils/format';
 
 import { MachineEventsPanel } from './MachineEventsPanel';
 import { MachineStatusForm } from './MachineStatusForm';
@@ -61,20 +61,20 @@ export function MachinesPage() {
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <StatTile
                   label="Status"
-                  value={selected.status.replace('_', ' ')}
+                  value={titleCase(selected.status)}
                   detail={`Updated ${formatDateTime(selected.updated_at)}`}
                 />
                 <StatTile
                   label="Inspected"
-                  value={summary.data ? formatNumber(summary.data.total_inspected) : '...'}
+                  value={summary.data ? formatNumber(summary.data.total_inspected) : undefined}
                 />
                 <StatTile
                   label="Failed"
-                  value={summary.data ? formatNumber(summary.data.failed) : '...'}
+                  value={summary.data ? formatNumber(summary.data.failed) : undefined}
                 />
                 <StatTile
                   label="Defect rate"
-                  value={summary.data ? formatPercent(summary.data.defect_rate) : '...'}
+                  value={summary.data ? formatPercent(summary.data.defect_rate) : undefined}
                 />
               </div>
               {summary.isError && (

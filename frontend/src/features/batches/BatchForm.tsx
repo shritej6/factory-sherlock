@@ -4,11 +4,10 @@ import type { FormEvent } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { SelectField, TextField } from '@/components/ui/Field';
-import { ErrorState, InlineNotice } from '@/components/ui/States';
+import { ErrorNotice, ErrorState } from '@/components/ui/States';
 import { invalidateProduction } from '@/hooks/invalidate';
 import { LOOKUP_PAGE, useMaterialLots, useOrders } from '@/hooks/queries';
 import { productionApi } from '@/services/api';
-import { describeError } from '@/utils/errors';
 import { formatNumber } from '@/utils/format';
 
 interface MaterialLine {
@@ -24,7 +23,7 @@ export function BatchForm({ onDone }: { onDone: () => void }) {
   const [orderId, setOrderId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [lines, setLines] = useState<MaterialLine[]>([{ key: 1, lotId: '', quantity: '' }]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
 
   const producible =
     orders.data?.items.filter((o) => o.status === 'RELEASED' || o.status === 'IN_PROGRESS') ?? [];
@@ -44,7 +43,7 @@ export function BatchForm({ onDone }: { onDone: () => void }) {
       invalidateProduction(queryClient);
       onDone();
     },
-    onError: (cause) => setError(describeError(cause)),
+    onError: setError,
   });
 
   function updateLine(key: number, patch: Partial<MaterialLine>) {
@@ -55,7 +54,7 @@ export function BatchForm({ onDone }: { onDone: () => void }) {
     event.preventDefault();
     setError(null);
     if (lines.some((line) => !line.lotId || !line.quantity)) {
-      setError('Every material line needs a lot and a quantity.');
+      setError(new Error('Every material line needs a lot and a quantity.'));
       return;
     }
     create.mutate();
@@ -156,7 +155,7 @@ export function BatchForm({ onDone }: { onDone: () => void }) {
           </Button>
         </div>
       </fieldset>
-      {error && <InlineNotice tone="error">{error}</InlineNotice>}
+      {error !== null && <ErrorNotice error={error} />}
       <div className="flex gap-2">
         <Button type="submit" variant="primary" busy={create.isPending}>
           Start batch

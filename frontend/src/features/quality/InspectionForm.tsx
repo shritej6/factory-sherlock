@@ -4,11 +4,11 @@ import type { FormEvent } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { SelectField, TextField } from '@/components/ui/Field';
-import { ErrorState, InlineNotice } from '@/components/ui/States';
+import { ErrorNotice, ErrorState, InlineNotice } from '@/components/ui/States';
 import { invalidateProduction } from '@/hooks/invalidate';
 import { useDefectTypes, useProducts } from '@/hooks/queries';
 import { qualityApi } from '@/services/api';
-import { describeError } from '@/utils/errors';
+import type { MutationMessage } from '@/utils/errors';
 
 export function InspectionForm({ onDone }: { onDone: () => void }) {
   const queryClient = useQueryClient();
@@ -18,7 +18,7 @@ export function InspectionForm({ onDone }: { onDone: () => void }) {
   const [specificationId, setSpecificationId] = useState('');
   const [measured, setMeasured] = useState('');
   const [codes, setCodes] = useState<string[]>([]);
-  const [message, setMessage] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
+  const [message, setMessage] = useState<MutationMessage | null>(null);
 
   const record = useMutation({
     mutationFn: () =>
@@ -37,7 +37,7 @@ export function InspectionForm({ onDone }: { onDone: () => void }) {
       setCodes([]);
       invalidateProduction(queryClient);
     },
-    onError: (cause) => setMessage({ tone: 'error', text: describeError(cause) }),
+    onError: (cause) => setMessage({ tone: 'error', error: cause }),
   });
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -128,7 +128,8 @@ export function InspectionForm({ onDone }: { onDone: () => void }) {
           ))}
         </div>
       </fieldset>
-      {message && <InlineNotice tone={message.tone}>{message.text}</InlineNotice>}
+      {message?.tone === 'success' && <InlineNotice tone="success">{message.text}</InlineNotice>}
+      {message?.tone === 'error' && <ErrorNotice error={message.error} />}
       <div className="flex gap-2">
         <Button type="submit" variant="primary" busy={record.isPending}>
           Record inspection

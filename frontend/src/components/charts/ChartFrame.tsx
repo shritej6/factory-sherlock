@@ -12,6 +12,8 @@ interface ChartFrameProps {
   height?: number;
   /** The plotted rows, offered as a table for readers who cannot use the chart. */
   tableRows?: ResultRow[];
+  /** Charts placed directly under the page heading use h2; charts inside a titled section use h3. */
+  headingLevel?: 'h2' | 'h3';
   children: ReactNode;
 }
 
@@ -23,19 +25,21 @@ export function ChartFrame({
   emptyTitle = 'No data for this window',
   height = 260,
   tableRows,
+  headingLevel: Heading = 'h2',
   children,
 }: ChartFrameProps) {
+  const imageLabel = [title, description].filter(Boolean).join('. ');
   return (
     <figure className="panel p-4">
       <figcaption className="mb-3">
-        <h3 className="text-sm font-semibold text-ink">{title}</h3>
+        <Heading className="text-sm font-semibold text-ink">{title}</Heading>
         {description && <p className="text-xs text-ink-muted">{description}</p>}
       </figcaption>
       {empty ? (
         <EmptyState title={emptyTitle} />
       ) : (
         <>
-          <div style={{ height }} role="img" aria-label={`${title}. ${description ?? ''}`}>
+          <div style={{ height }} role="img" aria-label={imageLabel}>
             {children}
           </div>
           {tableRows && tableRows.length > 0 && (

@@ -17,6 +17,7 @@ import {
   seriesColor,
   TOOLTIP_STYLE,
 } from '@/utils/chartTheme';
+import { formatNumber, formatPercent } from '@/utils/format';
 
 import { ChartFrame } from './ChartFrame';
 
@@ -95,7 +96,7 @@ export function CountBarChart({
             contentStyle={TOOLTIP_STYLE}
             cursor={{ fill: GRID_COLOR }}
             formatter={(value) => [
-              `${Number(value)} (${total ? ((Number(value) / total) * 100).toFixed(1) : '0.0'}%)`,
+              `${formatNumber(Number(value))} (${formatPercent(total ? Number(value) / total : 0)})`,
               'Count',
             ]}
           />

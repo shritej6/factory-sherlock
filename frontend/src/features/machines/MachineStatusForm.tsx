@@ -4,12 +4,12 @@ import type { FormEvent } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { SelectField, TextField } from '@/components/ui/Field';
-import { InlineNotice } from '@/components/ui/States';
+import { ErrorNotice, InlineNotice } from '@/components/ui/States';
 import { invalidateProduction } from '@/hooks/invalidate';
 import { queryKeys } from '@/hooks/queries';
 import { catalogApi } from '@/services/api';
 import type { Machine, MachineStatus } from '@/types/api';
-import { describeError } from '@/utils/errors';
+import type { MutationMessage } from '@/utils/errors';
 import { titleCase } from '@/utils/format';
 import { legalMachineMoves } from '@/utils/transitions';
 
@@ -19,7 +19,7 @@ export function MachineStatusForm({ machine }: { machine: Machine }) {
   const [status, setStatus] = useState<MachineStatus | ''>(moves[0] ?? '');
   const [reason, setReason] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ status?: string; reason?: string }>({});
-  const [message, setMessage] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
+  const [message, setMessage] = useState<MutationMessage | null>(null);
 
   const change = useMutation({
     mutationFn: () =>
@@ -31,7 +31,7 @@ export function MachineStatusForm({ machine }: { machine: Machine }) {
       invalidateProduction(queryClient);
       void queryClient.invalidateQueries({ queryKey: queryKeys.machineEvents(machine.id) });
     },
-    onError: (cause) => setMessage({ tone: 'error', text: describeError(cause) }),
+    onError: (cause) => setMessage({ tone: 'error', error: cause }),
   });
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -75,7 +75,8 @@ export function MachineStatusForm({ machine }: { machine: Machine }) {
         error={fieldErrors.reason}
         hint="Recorded on the machine event timeline."
       />
-      {message && <InlineNotice tone={message.tone}>{message.text}</InlineNotice>}
+      {message?.tone === 'success' && <InlineNotice tone="success">{message.text}</InlineNotice>}
+      {message?.tone === 'error' && <ErrorNotice error={message.error} />}
       <Button type="submit" variant="primary" busy={change.isPending} disabled={moves.length === 0}>
         Apply status
       </Button>

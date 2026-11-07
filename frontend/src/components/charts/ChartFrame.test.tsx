@@ -25,6 +25,21 @@ describe('ChartFrame', () => {
     expect(within(table).getByText('9.6%')).toBeInTheDocument();
   });
 
+  it('titles the chart with a second-level heading unless the caller nests it deeper', () => {
+    const { rerender } = render(
+      <ChartFrame title="Defect rate by machine" empty>
+        <svg aria-hidden="true" />
+      </ChartFrame>,
+    );
+    expect(screen.getByRole('heading', { level: 2, name: 'Defect rate by machine' })).toBeVisible();
+    rerender(
+      <ChartFrame title="Defect rate by machine" empty headingLevel="h3">
+        <svg aria-hidden="true" />
+      </ChartFrame>,
+    );
+    expect(screen.getByRole('heading', { level: 3, name: 'Defect rate by machine' })).toBeVisible();
+  });
+
   it('shows the empty state and no table when there is nothing to plot', () => {
     render(
       <ChartFrame title="Daily production trend" empty tableRows={[]}>

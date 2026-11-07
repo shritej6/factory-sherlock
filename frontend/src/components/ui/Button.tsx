@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, Ref } from 'react';
 
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
 type Size = 'sm' | 'md';
@@ -7,6 +7,8 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
   busy?: boolean;
+  /** Lets a parent return focus to the button after an inline form it opened is closed. */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 const VARIANT_CLASSES: Record<Variant, string> = {

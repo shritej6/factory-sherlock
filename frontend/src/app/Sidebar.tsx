@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { NavLink } from 'react-router';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -16,9 +16,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const { user, logout } = useAuth();
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const drawerHidden = !open && !isDesktop;
+  const nav = useRef<HTMLElement>(null);
 
+  // The drawer precedes the Menu button in the DOM, so focus must move into it when it opens.
   useEffect(() => {
     if (!open) return;
+    nav.current?.querySelector<HTMLAnchorElement>('a')?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
@@ -41,7 +44,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         id="primary-navigation"
         inert={drawerHidden}
         className={`fixed inset-y-0 left-0 z-30 flex w-64 flex-col bg-sidebar text-sidebar-ink transition-transform motion-reduce:transition-none lg:static lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}
-        aria-label="Primary"
+        aria-label="Sidebar"
       >
         <div className="border-b border-white/10 px-5 py-4">
           <p className="text-base font-semibold tracking-tight text-white">Factory Sherlock</p>
@@ -49,7 +52,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             Production intelligence
           </p>
         </div>
-        <nav className="flex-1 overflow-y-auto px-2 py-3">
+        <nav ref={nav} aria-label="Primary" className="flex-1 overflow-y-auto px-2 py-3">
           <ul className="flex flex-col gap-0.5">
             {NAV_ITEMS.map((item) => (
               <li key={item.to}>

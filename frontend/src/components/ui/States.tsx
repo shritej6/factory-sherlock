@@ -22,6 +22,12 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   );
 }
 
+/** The backend correlation id, shown with every failure so it can be quoted in a report. */
+function RequestId({ error }: { error: unknown }) {
+  if (!(error instanceof ApiError) || !error.requestId) return null;
+  return <p className="mt-1 font-mono text-xs text-ink-muted">Request id {error.requestId}</p>;
+}
+
 export function ErrorState({
   error,
   onRetry,
@@ -38,9 +44,7 @@ export function ErrorState({
     >
       <p className="font-medium">{title}</p>
       <p className="mt-1 text-ink-muted">{describeError(error)}</p>
-      {error instanceof ApiError && error.requestId && (
-        <p className="mt-1 font-mono text-xs text-ink-faint">Request id {error.requestId}</p>
-      )}
+      <RequestId error={error} />
       {onRetry && (
         <Button size="sm" className="mt-3" onClick={onRetry}>
           Try again
@@ -69,5 +73,18 @@ export function InlineNotice({
     >
       {children}
     </div>
+  );
+}
+
+/**
+ * Failure notice for a form or row action. Shows the backend message (or the text passed as
+ * children) and the request id, so mutation failures read the same as ErrorState.
+ */
+export function ErrorNotice({ error, children }: { error: unknown; children?: ReactNode }) {
+  return (
+    <InlineNotice tone="error">
+      <p>{children ?? describeError(error)}</p>
+      <RequestId error={error} />
+    </InlineNotice>
   );
 }

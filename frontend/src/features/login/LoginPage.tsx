@@ -4,9 +4,8 @@ import { Navigate, useLocation, useNavigate } from 'react-router';
 
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/Field';
-import { InlineNotice } from '@/components/ui/States';
+import { ErrorNotice } from '@/components/ui/States';
 import { useAuth } from '@/hooks/useAuth';
-import { describeError } from '@/utils/errors';
 
 interface LocationState {
   from?: { pathname: string };
@@ -18,7 +17,7 @@ export function LoginPage() {
   const location = useLocation();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const redirectTo = (location.state as LocationState | null)?.from?.pathname ?? '/';
@@ -33,7 +32,7 @@ export function LoginPage() {
       await login(username.trim(), password);
       navigate(redirectTo, { replace: true });
     } catch (cause) {
-      setError(describeError(cause));
+      setError(cause);
     } finally {
       setSubmitting(false);
     }
@@ -64,7 +63,7 @@ export function LoginPage() {
             onChange={(event) => setPassword(event.target.value)}
             required
           />
-          {error && <InlineNotice tone="error">{error}</InlineNotice>}
+          {error !== null && <ErrorNotice error={error} />}
           <Button
             type="submit"
             variant="primary"

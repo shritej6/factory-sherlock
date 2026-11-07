@@ -25,6 +25,13 @@ export function formatPercent(fraction: number | string | null | undefined, digi
   return `${(numeric * 100).toFixed(digits)}%`;
 }
 
+/** Measured values and specification limits are shown to three decimals; null reads as n/a. */
+export function formatMeasure(value: number | string | null | undefined, digits = 3): string {
+  if (value === null || value === undefined || value === '') return 'n/a';
+  const numeric = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric.toFixed(digits) : String(value);
+}
+
 /** Converts a datetime-local input value to the seconds-precision ISO form the API expects. */
 export function toApiDateTime(local: string): string {
   if (!local) return local;

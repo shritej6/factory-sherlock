@@ -7,13 +7,12 @@ import { TextField } from '@/components/ui/Field';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { StatTile } from '@/components/ui/StatTile';
-import { ErrorState, InlineNotice, LoadingState } from '@/components/ui/States';
+import { ErrorNotice, ErrorState, InlineNotice, LoadingState } from '@/components/ui/States';
 import { invalidateProduction } from '@/hooks/invalidate';
 import { useMachines } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
 import { simulationApi } from '@/services/api';
 import type { FaultScenario, SimulationResult } from '@/types/api';
-import { describeError } from '@/utils/errors';
 import { formatNumber, formatPercent, toApiDateTime } from '@/utils/format';
 
 import { FaultScenarioBuilder } from './FaultScenarioBuilder';
@@ -50,7 +49,7 @@ export function SimulationPage() {
   const [unitsPerBatch, setUnitsPerBatch] = useState('20');
   const [minutesPerBatch, setMinutesPerBatch] = useState('30');
   const [faults, setFaults] = useState<FaultScenario[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
 
   const run = useMutation({
     mutationFn: () =>
@@ -66,7 +65,7 @@ export function SimulationPage() {
       setError(null);
       invalidateProduction(queryClient);
     },
-    onError: (cause) => setError(describeError(cause)),
+    onError: setError,
   });
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -149,7 +148,7 @@ export function SimulationPage() {
               faults={faults}
               onChange={setFaults}
             />
-            {error && <InlineNotice tone="error">{error}</InlineNotice>}
+            {error !== null && <ErrorNotice error={error} />}
             <div>
               <Button type="submit" variant="primary" busy={run.isPending}>
                 Run simulation

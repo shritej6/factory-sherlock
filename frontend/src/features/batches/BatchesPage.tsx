@@ -8,7 +8,7 @@ import { SelectField } from '@/components/ui/Field';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PageBody, Pagination } from '@/components/ui/Pagination';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { ErrorState, InlineNotice, LoadingState } from '@/components/ui/States';
+import { ErrorNotice, ErrorState, InlineNotice, LoadingState } from '@/components/ui/States';
 import { LOOKUP_PAGE, useBatches, useMachines, useMaterialLots, useOrders } from '@/hooks/queries';
 import { useAuth } from '@/hooks/useAuth';
 import { usePageState } from '@/hooks/usePageState';
@@ -26,7 +26,7 @@ export function BatchesPage() {
   const [orderId, setOrderId] = useState('');
   const [machineId, setMachineId] = useState(searchParams.get('machine') ?? '');
   const [status, setStatus] = useState<BatchStatus | ''>('');
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const filters = {
     ...(orderId ? { order_id: Number(orderId) } : {}),
     ...(machineId ? { machine_id: Number(machineId) } : {}),
@@ -175,9 +175,9 @@ export function BatchesPage() {
           </InlineNotice>
         </div>
       )}
-      {actionError && (
+      {actionError !== null && (
         <div className="mb-3">
-          <InlineNotice tone="error">{actionError}</InlineNotice>
+          <ErrorNotice error={actionError} />
         </div>
       )}
       <div className="panel">
