@@ -55,6 +55,7 @@ th {{
   padding: 4pt 5pt; border: 0.5pt solid {RULE}; vertical-align: bottom;
 }}
 td {{ padding: 3.5pt 5pt; border: 0.5pt solid {RULE}; vertical-align: top; }}
+th, td {{ overflow-wrap: anywhere; min-width: 3.2em; }}
 tbody tr:nth-child(even) td {{ background: {ZEBRA}; }}
 tr {{ break-inside: avoid; page-break-inside: avoid; }}
 code {{ font-family: Menlo, Consolas, monospace; font-size: 0.92em; }}
