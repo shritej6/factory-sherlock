@@ -135,6 +135,7 @@ erDiagram
     alerts {
         int id PK
         int machine_id FK
+        int production_order_id FK
         enum alert_type
         enum severity
         varchar message
@@ -185,6 +186,7 @@ erDiagram
     users |o--o{ alerts : "acknowledges"
     users |o--o{ investigations : "opens"
     production_orders ||--o{ production_batches : "is fulfilled by"
+    production_orders |o--o{ alerts : "is flagged overdue by"
     production_batches ||--o{ production_units : "produces"
     production_batches ||--o{ batch_materials : "consumes"
     material_lots ||--o{ batch_materials : "is consumed in"
@@ -207,6 +209,7 @@ erDiagram
 | machines to production_batches | 1 to many | The machine that actually ran the batch; mandatory |
 | machines to machine_events | 1 to many | Append-only event log |
 | production_orders to production_batches | 1 to many | A batch belongs to exactly one order |
+| production_orders to alerts | 0..1 to many | ORDER_OVERDUE alerts name the order they are about; other alert types leave it NULL |
 | production_batches to production_units | 1 to many | One row per serial number |
 | production_units to inspections | 1 to many | At most one inspection per unit per specification |
 | product_specifications to inspections | 1 to many | Each inspection checks one characteristic |
@@ -226,7 +229,7 @@ erDiagram
 Conventions used in this section:
 
 - "PK" is the primary key. Every non-junction table uses an `int AUTO_INCREMENT` surrogate key; junction tables use a composite primary key of their two foreign keys.
-- Foreign key constraint names (`<table>_ibfk_N`) are assigned by MySQL because the migration does not name them. Index names shown without a prefix (for example `machine_id` on `alerts`) are the implicit indexes InnoDB creates for foreign key columns that have no explicit index.
+- Foreign key constraint names (`<table>_ibfk_N`) are assigned by MySQL because the first migration does not name them; the one exception is `fk_alerts_production_order`, added by revision `383273c26ef7`, which is named so its downgrade can drop it. Index names shown without a prefix (for example `machine_id` on `alerts`) are the implicit indexes InnoDB creates for foreign key columns that have no explicit index.
 - "Serves" names the query file (see [queries.md](queries.md)) or service function that benefits from an index.
 
 ### 3.1 users
@@ -386,12 +389,12 @@ The result is stored rather than recomputed from the specification so that histo
 
 | Item | Value |
 |------|-------|
-| Purpose | Notifications raised by the simulation (`HIGH_DEFECT_RATE`, `MACHINE_FAULT`) and by quarantine actions (`MATERIAL_QUARANTINE`). `ORDER_OVERDUE` is defined in the ENUM but no code path currently raises it. |
+| Purpose | Notifications raised by the simulation (`HIGH_DEFECT_RATE`, `MACHINE_FAULT`), by quarantine actions (`MATERIAL_QUARANTINE`), and by the overdue order check (`ORDER_OVERDUE`, `alert_service.raise_overdue_order_alerts`). |
 | PK | `id` |
-| Foreign keys | `machine_id` to `machines.id` ON DELETE SET NULL; `acknowledged_by` to `users.id` ON DELETE SET NULL. Alerts are audit rows; they should outlive the machine or user they mention. |
+| Foreign keys | `machine_id` to `machines.id` ON DELETE SET NULL; `production_order_id` to `production_orders.id` ON DELETE SET NULL (`fk_alerts_production_order`, revision `383273c26ef7`); `acknowledged_by` to `users.id` ON DELETE SET NULL. Alerts are audit rows; they should outlive the machine, order, or user they mention. |
 | Unique | none |
 | Check | none |
-| Indexes | `PRIMARY`; implicit FK indexes `machine_id`, `acknowledged_by`; `ix_alerts_created (created_at, id)` matches the `ORDER BY created_at DESC, id DESC` of `analytics_service.recent_alerts`. With the two alerts of the demo scenario EXPLAIN still shows a full scan with a filesort, which is the optimizer's choice for a table that small; the index becomes the access path as the table grows. |
+| Indexes | `PRIMARY`; implicit FK indexes `machine_id`, `acknowledged_by`; `ix_alerts_production_order (production_order_id)` backs the foreign key and the lookup of open ORDER_OVERDUE alerts per order in `alert_service._orders_with_open_alert`; `ix_alerts_created (created_at, id)` matches the `ORDER BY created_at DESC, id DESC` of `analytics_service.recent_alerts`. With the two alerts of the demo scenario EXPLAIN still shows a full scan with a filesort, which is the optimizer's choice for a table that small; the index becomes the access path as the table grows. |
 
 ### 3.15 investigations
 
@@ -432,7 +435,7 @@ The result is stored rather than recomputed from the specification so that histo
 |--------|---------|-----------|
 | CASCADE | product_specifications.product_id, inspection_defects.inspection_id, investigation_evidence.investigation_id, investigation_batches.investigation_id | Child rows are compositional parts of the parent, are always created with it, and carry no traceability of their own: evidence belongs to its investigation, a defect classification belongs to its inspection. |
 | RESTRICT | machine_events.machine_id, production_orders.product_id, production_batches.production_order_id, production_batches.machine_id, production_units.batch_id, batch_materials.batch_id, batch_materials.material_lot_id, inspections.unit_id, inspections.specification_id, inspection_defects.defect_type_id, investigation_batches.batch_id | The parent is reference or historical data, or the child is itself a traceability record (units, material links, inspections, flagged batches). Deleting the parent would destroy traceability or the meaning of stored results, so the delete is refused until the children are removed explicitly. |
-| SET NULL | production_orders.machine_id, alerts.machine_id, alerts.acknowledged_by, investigations.machine_id, investigations.product_id, investigations.opened_by | The reference is an assignment or attribution that can be lost without invalidating the row. |
+| SET NULL | production_orders.machine_id, alerts.machine_id, alerts.production_order_id, alerts.acknowledged_by, investigations.machine_id, investigations.product_id, investigations.opened_by | The reference is an assignment or attribution that can be lost without invalidating the row. |
 
 The ORM mirrors the CASCADE cases with `cascade="all, delete-orphan"` on `Product.specifications`, `Inspection.defect_links`, `Investigation.evidence`, and `Investigation.batch_links`, so deletes issued through the session and deletes issued directly in SQL behave the same way.
 
@@ -510,6 +513,7 @@ The lot's status is set to `QUARANTINED`, every batch that consumed it (found th
 | `ix_production_orders_status` | Order lists filtered by status |
 | `ix_production_units_produced_at` | Time-window filter of query 09 (`produced_at` leading, `batch_id` second so the batch join reads from the index) |
 | `ix_alerts_created` | `ORDER BY created_at DESC, id DESC` in `recent_alerts` |
+| `ix_alerts_production_order` | Open ORDER_OVERDUE alert per order in `alert_service._orders_with_open_alert`; also the index behind `fk_alerts_production_order` |
 | `uq_spec_product_characteristic`, `uq_unit_batch_sequence`, `uq_inspection_unit_spec`, `uq_evidence_investigation_sequence` | Composite unique keys whose leading column is the foreign key, so one index serves both the constraint and the join |
 
 ### Known gaps (follow-up work)

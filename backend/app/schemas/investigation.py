@@ -78,6 +78,7 @@ class InvestigationRead(ApiModel):
 class AlertRead(ApiModel):
     id: int
     machine_id: int | None
+    production_order_id: int | None
     alert_type: AlertType
     severity: Severity
     message: str

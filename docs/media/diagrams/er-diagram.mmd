@@ -110,6 +110,7 @@ erDiagram
     alerts {
         int id PK
         int machine_id FK
+        int production_order_id FK
         enum alert_type
         enum severity
         varchar message
@@ -163,6 +164,7 @@ erDiagram
 
     %% Production chain
     production_orders ||--o{ production_batches : "is fulfilled by"
+    production_orders |o--o{ alerts : "is flagged overdue by"
     production_batches ||--o{ production_units : "produces"
 
     %% Many-to-many 1: batches and material lots
