@@ -16,7 +16,7 @@ The Week 12 next-step plan listed five items for this milestone. All five are in
 | Usable interface for every module | Complete | Nine sidebar sections in frontend/src/app/nav.ts, each routed in frontend/src/app/router.tsx behind RequireAuth, plus login and the investigation detail route. Screenshots 01 to 09 in docs/media/screenshots. |
 | API contract documented | Complete | docs/api/openapi.json, 35 paths and 44 operations, regenerated at commit c978744; frontend/src/types/api.ts mirrors every schema the interface reads. |
 | Integration tests | Complete | Backend: 481 tests collected by `uv run pytest --collect-only -q` on 2026-11-07, including tests/api/test_status_filters_api.py and tests/api/test_pagination_api.py. Frontend: Vitest 25 files, 118 tests passed the same day. |
-| End-to-end suite | Written and wired into CI | Playwright, 5 spec files and 9 tests in frontend/e2e, run by .github/workflows/e2e.yml against a seeded MySQL 8.4 service. [Record the first green End-to-End run id after the push.] |
+| End-to-end suite | Complete; 9 of 9 passed locally | Playwright, 5 spec files and 9 tests in frontend/e2e; `pnpm test:e2e` passed 9 of 9 on 2026-11-07 at commit 11d5c3a after two sidebar locators were repointed at the renamed landmarks; .github/workflows/e2e.yml runs the same suite against a seeded MySQL 8.4 service. [Record the first green End-to-End run id after the push.] |
 | Accessibility pass | Complete | Commit f62170c (skip link, drawer focus, Disclosure focus return, named row actions, heading levels, contrast tokens) with tests in frontend/src/app/AppLayout.test.tsx, frontend/src/components/ui/Disclosure.test.tsx, and frontend/src/features/batches/BatchActions.test.tsx. |
 
 Incomplete or carried into Week 14:

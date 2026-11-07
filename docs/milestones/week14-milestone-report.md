@@ -14,13 +14,13 @@ The Week 14 row of docs/milestones/README.md lists eight required artifacts; the
 | Item | Status | Evidence |
 |---|---|---|
 | Release candidate | Complete on the branch, tag pending | feature/completion-integration holds every feature and fix merge since the first push on 2026-11-04; five GitHub Actions workflows; all local gates pass (section 2). Tag v1.0.0-rc1 is [to be created after the merge to main]. |
-| Completed test matrix | In progress (parallel documentation pass) | docs/testing/test-matrix.md and testing-strategy.md are being updated to the counts in section 2; the tests they cite exist under backend/tests and frontend/src. |
+| Completed test matrix | Complete | docs/testing/test-matrix.md (TM-01 to TM-34, one row per behaviour and one per Playwright spec) and testing-strategy.md were rewritten on 2026-11-07 from the suite runs in section 2; every cited test name was checked against backend/tests and frontend/src. |
 | Defect and fix evidence | Complete | Nine review and fix reports from the final wave, condensed in section 2; every named test exists in the worktree. |
 | Final ERD and schema | Complete | docs/media/diagrams/er-diagram.svg; database/schema/schema.sql regenerated in c978744; three migrations with downgrades. |
-| Tested README | Partly complete | README commands executed in this worktree (section 2); stale README statements listed for correction. |
+| Tested README | Complete | README commands executed in this worktree (section 2); the stale statements found during that run were corrected the same day (commit 9e7cd7a). |
 | Demo data | Complete | make reset-demo against database fs_w08 on 2026-11-07; counts in section 2. |
-| Report draft | In progress | This document. The Week 12 and 13 reports are listed as "to be written" in docs/milestones/README.md and were not in this worktree at the time of writing. |
-| AI evidence package | Complete, student annotations pending | docs/ai_evidence: README, ai-use-record.md (43 rows), six conversation records, reflection-notes.md. |
+| Report draft | Complete, student sections pending | This document plus docs/milestones/week12-milestone-report.md and week13-milestone-report.md; the bracketed prompts in sections 4, 6, 8 and 9 of each are for the student. |
+| AI evidence package | Complete, student annotations pending | docs/ai_evidence: README, ai-use-record.md (50 rows), seven conversation records, reflection-notes.md. |
 | Walkthrough video and screenshot refresh | In progress | docs/media/videos/README.md lists six videos, all Pending; the nine screenshots are dated 2026-11-03 and predate pagination, the control chart, the import panel, and the overdue check. No new files exist in this worktree. |
 
 Blockers: none that stop the submission. Open risks are the recording time for the video and the first GitHub Actions runs of the Compose Smoke and End-to-End workflows, which happen only when the branch is pushed. [Add any blocker you see, or write "none".]
@@ -90,7 +90,7 @@ database/schema/schema.sql was regenerated from the migrated database in c978744
 
 README.md commands executed in this worktree on 2026-11-07 against the shared local MySQL 8.4.0 server with .env pointing at fs_w08: cd backend && uv sync; uv run alembic upgrade head (383273c26ef7 and 6c1f0d2a9b47 applied on top of 3a5e982c3679); cd frontend && pnpm install --frozen-lockfile; make reset-demo (dropped 18 tables, re-ran the three migrations, seeded the scenario); make lint; make test-frontend; make test-backend; make check-docs; make help. make db-init and make db-start were not run because the shared server was already up; docker compose up was not run because Docker is not installed on this machine (the Compose Smoke workflow covers that path).
 
-README.md statements that no longer match the code, to correct before the tag: "Six evidence rules (R1 to R6)" (lines 49, 158; there are seven), "Twelve SQL files" (lines 132, 167, 269, 314; there are 14), "31 paths" (line 289; openapi.json has 35 paths and 44 operations), the 2026-11-03 test table (lines 256, 260), "eight records" (line 301; nine ADRs), "the compose file has not been executed" (line 109), "no rate limiting or account lockout" (line 344), and "without pagination" (line 345). Roadmap items 2 to 6 are implemented.
+That run found README.md statements that no longer matched the code: "Six evidence rules (R1 to R6)" (there are seven), "Twelve SQL files" (there are 14), "31 paths" (openapi.json has 35 paths and 44 operations), the 2026-11-03 test table, "eight records" (nine ADRs), "the compose file has not been executed", "no rate limiting or account lockout", "without pagination", and roadmap items 2 to 6 still listed as open. All of them were corrected in commit 9e7cd7a, which also updated CONTRIBUTING.md, CHANGELOG.md and the development roadmap.
 
 ### Demo data
 
@@ -114,7 +114,7 @@ The seed opens no investigation; the case board screenshot and the end-to-end sp
 
 ### Report draft
 
-This document is the Week 14 draft. The Week 12 and Week 13 reports are being written in parallel and were not in this worktree when this report was committed. All three build to DOCX and PDF with docs/milestones/build_documents.py, which also counts the bracketed prompts that remain.
+This document is the Week 14 draft; the Week 12 and Week 13 reports sit beside it in docs/milestones. All three build to DOCX and PDF with docs/milestones/build_documents.py, which also counts the bracketed prompts that remain for the student.
 
 ### AI evidence package
 
