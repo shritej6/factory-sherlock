@@ -5,8 +5,10 @@
 # ${...} references below from .env by default; the whole file is deliberately
 # not passed to the container.
 #
-# This path has not been executed on the development machine because Docker is
-# not installed there; treat it as untested.
+# Docker is not installed on the development machine. This path is verified in
+# GitHub Actions by the Compose Smoke workflow
+# (.github/workflows/compose-smoke.yml), which runs on every change to this
+# file, scripts/setup/, or .env.example.
 services:
   mysql:
     image: mysql:8.4
