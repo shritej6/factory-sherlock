@@ -27,6 +27,19 @@ class RuleThresholds:
     batch_review_rate: float = 0.10
     # Hours to look back from the onset bucket for machine events.
     event_lookback_hours: int = 6
+    # R7 one-sided CUSUM over hourly defect rates. The reference rate p0 is the
+    # machine's own pooled rate over its first ``cusum_baseline_hours`` hourly
+    # buckets in the window; the allowance k is half of ``elevated_min_rate``
+    # (0.025), so hours less than 2.5 points above the reference add nothing;
+    # the statistic signals when it reaches ``cusum_decision_interval``, ten
+    # points of accumulated excess. With the seed 42 demo scenario CNC-03
+    # signals at 10:00 and CNC-01 and CNC-02 never leave zero.
+    cusum_baseline_hours: int = 3
+    cusum_decision_interval: float = 0.10
+
+    @property
+    def cusum_allowance(self) -> float:
+        return self.elevated_min_rate / 2
 
 
 @dataclass
@@ -42,6 +55,7 @@ class InvestigationContext:
     fleet_rate: float | None = None
     dominant_defect: str | None = None
     onset_time: datetime | None = None
+    cusum_onset_time: datetime | None = None
     affected_batch_ids: list[int] = field(default_factory=list)
     affected_batch_numbers: list[str] = field(default_factory=list)
     related_events: list[dict[str, Any]] = field(default_factory=list)
@@ -242,6 +256,91 @@ def rule_shared_material_lots(ctx: InvestigationContext, runner: QueryRunner) ->
     return Evidence("R6", "Shared material lots", narrative, name, runner.sql(name), rows)
 
 
+def _cusum_rows(
+    rows: list[dict[str, Any]], t: RuleThresholds
+) -> tuple[list[dict[str, Any]], float]:
+    """Append ``cusum`` and ``signal`` to each hourly row.
+
+    S_t = max(0, S_{t-1} + (p_t - p0 - k)), rounded to 4 places at every step
+    so the stored values can be checked by hand from the rows themselves.
+    """
+    baseline = rows[: t.cusum_baseline_hours]
+    inspected = sum(int(r["inspected_count"]) for r in baseline)
+    p0 = round(sum(int(r["failed_count"]) for r in baseline) / inspected, 4) if inspected else 0.0
+    statistic = 0.0
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        rate = float(row["defect_rate"] or 0.0)
+        statistic = round(max(0.0, statistic + (rate - p0 - t.cusum_allowance)), 4)
+        out.append({**row, "cusum": statistic, "signal": statistic >= t.cusum_decision_interval})
+    return out, p0
+
+
+def _hours_apart(later: datetime, earlier: datetime) -> str:
+    hours = int((later - earlier).total_seconds() // 3600)
+    if hours == 0:
+        return "the same hour as"
+    unit = "hour" if abs(hours) == 1 else "hours"
+    return f"{abs(hours)} {unit} {'after' if hours > 0 else 'before'}"
+
+
+def _cusum_narrative(ctx: InvestigationContext, rows: list[dict[str, Any]], p0: float) -> str:
+    t = ctx.thresholds
+    setup = (
+        f"One-sided CUSUM over {len(rows)} hourly defect rates (reference {_pct(p0)} from the "
+        f"first {t.cusum_baseline_hours} hours, allowance {_pct(t.cusum_allowance)}, "
+        f"decision interval {_pct(t.cusum_decision_interval)})."
+    )
+    first = next((r for r in rows if r["signal"]), None)
+    review = _pct(t.batch_review_rate)
+    if first is None:
+        tail = (
+            f" R3 found an hour at or above {review} starting {ctx.onset_time:%H:%M}, but the "
+            "accumulated excess over the reference never reached the decision interval."
+            if ctx.onset_time
+            else ""
+        )
+        return (
+            f"{setup} The statistic stayed below the decision interval in every hour, so no "
+            f"sustained shift away from the reference rate was detected.{tail}"
+        )
+    signal_time = datetime.fromisoformat(first["bucket_start"])
+    when = (
+        f"{_hours_apart(signal_time, ctx.onset_time)} the first hour at or above {review} "
+        f"found by R3 ({ctx.onset_time:%H:%M})"
+        if ctx.onset_time
+        else f"while R3 found no single hour at or above {review}"
+    )
+    return (
+        f"{setup} The statistic first reached {first['cusum']:.4f} in the hour starting "
+        f"{first['bucket_start']}, {when}. A CUSUM signal marks a sustained shift relative "
+        "to the first hours of the window; it does not identify what changed."
+    )
+
+
+def rule_cusum_onset(ctx: InvestigationContext, runner: QueryRunner) -> Evidence | None:
+    """R7: statistical onset detection with a one-sided CUSUM on hourly defect rates."""
+    if ctx.machine_id is None:
+        return None
+    name = "investigation.hourly_defect_rates"
+    rows = runner.run(
+        name,
+        {
+            "machine_id": ctx.machine_id,
+            "window_start": ctx.window_start,
+            "window_end": ctx.window_end,
+        },
+    )
+    if len(rows) < ctx.thresholds.cusum_baseline_hours:
+        return None
+    rows, p0 = _cusum_rows(rows, ctx.thresholds)
+    first = next((r for r in rows if r["signal"]), None)
+    if first is not None:
+        ctx.cusum_onset_time = datetime.fromisoformat(first["bucket_start"])
+    narrative = _cusum_narrative(ctx, rows, p0)
+    return Evidence("R7", "CUSUM onset detection", narrative, name, runner.sql(name), rows)
+
+
 RULES = (
     rule_defect_rate_elevation,
     rule_dominant_defect,
@@ -249,4 +348,5 @@ RULES = (
     rule_related_machine_events,
     rule_affected_batches,
     rule_shared_material_lots,
+    rule_cusum_onset,
 )

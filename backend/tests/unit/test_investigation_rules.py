@@ -4,8 +4,9 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
+import pytest
 from app.investigation.engine import investigate
-from app.investigation.rules import InvestigationContext
+from app.investigation.rules import InvestigationContext, RuleThresholds, rule_cusum_onset
 
 WINDOW = (datetime(2026, 11, 2), datetime(2026, 11, 4))
 
@@ -92,22 +93,46 @@ def elevated_dataset() -> dict[str, list[dict[str, Any]]]:
             {"lot_number": "L201", "affected_batches_using_lot": 2, "total_batches_using_lot": 5},
             {"lot_number": "L202", "affected_batches_using_lot": 1, "total_batches_using_lot": 3},
         ],
+        "investigation.hourly_defect_rates": hourly_rows([0, 0, 0, 5, 10]),
     }
 
 
-def test_elevated_machine_produces_six_evidence_cards_and_flags_batches() -> None:
+def hourly_rows(failed_per_hour: list[int], inspected: int = 20) -> list[dict[str, Any]]:
+    """Hourly buckets from 06:00 with the given failure counts, like the SQL returns them."""
+    return [
+        {
+            "bucket_start": f"2026-11-02T{6 + hour:02d}:00:00",
+            "inspected_count": inspected,
+            "failed_count": failed,
+            "defect_rate": round(failed / inspected, 4),
+        }
+        for hour, failed in enumerate(failed_per_hour)
+    ]
+
+
+def test_elevated_machine_produces_seven_evidence_cards_and_flags_batches() -> None:
     runner = FakeRunner(elevated_dataset())
     ctx = InvestigationContext(
         machine_id=3, machine_code="CNC-03", window_start=WINDOW[0], window_end=WINDOW[1]
     )
     report = investigate(ctx, runner)
-    assert [e.rule_code for e in report.evidence] == ["R1", "R2", "R3", "R4", "R5", "R6"]
+    assert [e.rule_code for e in report.evidence] == ["R1", "R2", "R3", "R4", "R5", "R6", "R7"]
     assert report.elevated is True
     assert report.affected_batch_ids == [11, 12]
     assert "elevated defect rate of 20.0%" in report.summary
     assert "Oversized diameter" in report.summary
     assert "does not establish" in report.summary  # correlation is not causation
     assert "L201" in report.summary and "L202" not in report.summary
+    # R3 onset is 09:00 (rate 0.25); the CUSUM reaches 0.225 >= 0.10 in that same hour.
+    assert report.evidence[6].rows[3] == {
+        "bucket_start": "2026-11-02T09:00:00",
+        "inspected_count": 20,
+        "failed_count": 5,
+        "defect_rate": 0.25,
+        "cusum": 0.225,
+        "signal": True,
+    }
+    assert "The CUSUM onset estimate falls in the same hour." in report.summary
     # Every evidence card carries the SQL it was built from.
     assert all(e.query_sql.startswith("--") for e in report.evidence)
     # R6 receives the batch ids found by R5.
@@ -126,7 +151,7 @@ def test_machine_in_line_with_fleet_is_not_elevated() -> None:
     assert report.elevated is False
     assert report.affected_batch_ids == []
     assert "No action is indicated" in report.summary
-    assert [e.rule_code for e in report.evidence] == ["R1", "R2", "R3", "R4", "R5"]
+    assert [e.rule_code for e in report.evidence] == ["R1", "R2", "R3", "R4", "R5", "R7"]
 
 
 def test_no_data_gives_a_plain_summary() -> None:
@@ -144,5 +169,92 @@ def test_fleet_wide_investigation_skips_machine_specific_rules() -> None:
     )
     report = investigate(ctx, FakeRunner(elevated_dataset()))
     codes = [e.rule_code for e in report.evidence]
-    assert "R3" not in codes and "R4" not in codes
+    assert "R3" not in codes and "R4" not in codes and "R7" not in codes
     assert "CNC-03 had the highest defect rate" in report.evidence[0].narrative
+
+
+def machine_ctx(onset_time: datetime | None = None) -> InvestigationContext:
+    ctx = InvestigationContext(
+        machine_id=3, machine_code="CNC-03", window_start=WINDOW[0], window_end=WINDOW[1]
+    )
+    ctx.onset_time = onset_time
+    return ctx
+
+
+def run_cusum(rows: list[dict[str, Any]], onset_time: datetime | None = None) -> tuple[Any, Any]:
+    ctx = machine_ctx(onset_time)
+    card = rule_cusum_onset(ctx, FakeRunner({"investigation.hourly_defect_rates": rows}))
+    return ctx, card
+
+
+def test_cusum_allowance_is_half_the_elevated_rate() -> None:
+    assert RuleThresholds().cusum_allowance == 0.025
+
+
+def test_cusum_signals_on_a_step_change_in_the_defect_rate() -> None:
+    ctx, card = run_cusum(hourly_rows([0, 0, 0, 0, 4, 4, 4]))
+    assert card is not None and card.rule_code == "R7"
+    assert card.query_name == "investigation.hourly_defect_rates"
+    assert [r["signal"] for r in card.rows] == [False, False, False, False, True, True, True]
+    assert ctx.cusum_onset_time == datetime(2026, 11, 2, 10)
+    assert "first reached 0.1750 in the hour starting 2026-11-02T10:00:00" in card.narrative
+    assert "while R3 found no single hour at or above 10.0%" in card.narrative
+
+
+def test_cusum_does_not_signal_on_flat_noise() -> None:
+    ctx, card = run_cusum(hourly_rows([0, 1, 0, 1, 1, 0], inspected=40))
+    assert card is not None
+    assert all(r["cusum"] == 0.0 and r["signal"] is False for r in card.rows)
+    assert ctx.cusum_onset_time is None
+    assert "stayed below the decision interval in every hour" in card.narrative
+
+
+def test_cusum_returns_none_without_a_machine_or_with_too_few_hours() -> None:
+    _, card = run_cusum(hourly_rows([0, 10]))
+    assert card is None
+    fleet = InvestigationContext(
+        machine_id=None, machine_code=None, window_start=WINDOW[0], window_end=WINDOW[1]
+    )
+    runner = FakeRunner({"investigation.hourly_defect_rates": hourly_rows([0, 0, 0, 5])})
+    assert rule_cusum_onset(fleet, runner) is None
+    assert runner.calls == []
+
+
+def test_cusum_arithmetic_matches_a_hand_computed_example() -> None:
+    # p0 = (2 + 4 + 0) / 300 = 0.02, k = 0.025, so each hour adds rate - 0.045:
+    # 0.02 -> 0, 0.04 -> 0, 0.00 -> 0, 0.10 -> 0.055, 0.20 -> 0.055 + 0.155 = 0.21.
+    _, card = run_cusum(hourly_rows([2, 4, 0, 10, 20], inspected=100))
+    assert card is not None
+    assert [r["cusum"] for r in card.rows] == [0.0, 0.0, 0.0, 0.055, 0.21]
+    assert [r["signal"] for r in card.rows] == [False, False, False, False, True]
+    assert list(card.rows[0]) == [
+        "bucket_start",
+        "inspected_count",
+        "failed_count",
+        "defect_rate",
+        "cusum",
+        "signal",
+    ]
+    assert "reference 2.0% from the first 3 hours" in card.narrative
+
+
+def test_cusum_narrative_compares_with_the_r3_onset() -> None:
+    _, later = run_cusum(hourly_rows([0, 0, 0, 0, 4, 4]), onset_time=datetime(2026, 11, 2, 9))
+    assert later is not None
+    assert "1 hour after the first hour at or above 10.0% found by R3 (09:00)" in later.narrative
+    _, same = run_cusum(hourly_rows([0, 0, 0, 0, 4, 4]), onset_time=datetime(2026, 11, 2, 10))
+    assert same is not None and "the same hour as the first hour" in same.narrative
+    _, quiet = run_cusum(hourly_rows([0, 0, 0, 1, 0, 0]), onset_time=datetime(2026, 11, 2, 9))
+    assert quiet is not None
+    assert "R3 found an hour at or above 10.0% starting 09:00, but" in quiet.narrative
+
+
+@pytest.mark.parametrize(
+    "failed_per_hour", [[0, 0, 0, 0, 4, 4, 4], [0, 1, 0, 1, 1, 0], [2, 4, 0, 10, 20]]
+)
+def test_cusum_narrative_never_uses_causal_language(failed_per_hour: list[int]) -> None:
+    for onset in (None, datetime(2026, 11, 2, 9)):
+        _, card = run_cusum(hourly_rows(failed_per_hour, inspected=100), onset_time=onset)
+        assert card is not None
+        lowered = card.narrative.lower()
+        assert "caused" not in lowered and "because" not in lowered

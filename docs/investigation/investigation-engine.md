@@ -1,14 +1,14 @@
 # Investigation engine
 
-The investigation engine answers the question "why did quality deteriorate on this machine during this period" with evidence an engineer can check. It runs six fixed rules, each backed by one SQL file, and stores every finding as an evidence card that carries the rule narrative, the exact SQL text, and the result rows.
+The investigation engine answers the question "why did quality deteriorate on this machine during this period" with evidence an engineer can check. It runs seven fixed rules, each backed by one SQL file, and stores every finding as an evidence card that carries the rule narrative, the exact SQL text, and the result rows.
 
-Source: `backend/app/investigation/` (`rules.py`, `summary.py`, `engine.py`), `backend/app/services/investigation_service.py` (persistence and status changes), `backend/app/repositories/query_runner.py` and `sql_loader.py` (query execution), `database/queries/` (SQL), `backend/app/schemas/investigation.py` (API contract), `backend/app/api/routes/investigations.py` (endpoints). Material traceability, which the last rule relies on, is documented in [traceability-design.md](traceability-design.md).
+Source: `backend/app/investigation/` (`rules.py`, `summary.py`, `engine.py`), `backend/app/services/investigation_service.py` (persistence and status changes), `backend/app/repositories/query_runner.py` and `sql_loader.py` (query execution), `database/queries/` (SQL), `backend/app/schemas/investigation.py` (API contract), `backend/app/api/routes/investigations.py` (endpoints). Material traceability, which rule R6 relies on, is documented in [traceability-design.md](traceability-design.md).
 
 ## Philosophy
 
 Explainable. There is no scoring model and no hidden weighting. Each rule is a short Python function that runs one named query, reads the rows, and writes a sentence or two. The query name, the SQL, and the rows are stored with the sentence, so a reviewer can rerun the query and reach the same conclusion.
 
-Evidence-based. A rule either produces an `Evidence` card from rows it actually retrieved or returns `None`. Rules do not infer anything that is not in the rows; thresholds are explicit constants in `RuleThresholds` and are quoted in the narratives.
+Evidence-based. A rule either produces an `Evidence` card from rows it actually retrieved or returns `None`. Rules do not infer anything that is not in the rows; thresholds are explicit constants in `RuleThresholds` and are quoted in the narratives. The one rule that derives values from its rows, R7, applies a stated formula (a cumulative sum) and stores the derived columns next to the counts they were computed from, so the arithmetic can be checked by hand.
 
 Correlation is not causation. The rule wording describes associations in time ("preceded", "before the onset", "share material lot") and never says that an event or a lot caused the defects. The narrative for machine events ends with "Timing suggests a relationship worth checking; it does not prove a cause." The summary says the timing "is consistent with a relationship but does not establish one." The causal judgement belongs to the engineer who closes the investigation with a written conclusion; the system stores the generated summary and the human conclusion side by side.
 
@@ -23,9 +23,9 @@ flowchart LR
     Svc --> Runner["SqlQueryRunner(session)"]
     Ctx --> Eng["engine.investigate"]
     Runner --> Eng
-    Eng --> R1["R1 defect rate elevation"] --> R2["R2 dominant defect"] --> R3["R3 defect onset"] --> R4["R4 events before onset"] --> R5["R5 affected batches"] --> R6["R6 shared material lots"]
+    Eng --> R1["R1 defect rate elevation"] --> R2["R2 dominant defect"] --> R3["R3 defect onset"] --> R4["R4 events before onset"] --> R5["R5 affected batches"] --> R6["R6 shared material lots"] --> R7["R7 CUSUM onset"]
     R1 -.-> Files["database/queries/*.sql"]
-    R6 -.-> Files
+    R7 -.-> Files
     Eng --> Sum["summary.build_summary(ctx)"]
     Eng --> Rep["InvestigationReport<br/>evidence, summary,<br/>affected_batch_ids, elevated"]
     Sum --> Rep
@@ -34,7 +34,7 @@ flowchart LR
 
 ### Context
 
-`InvestigationContext` (`rules.py`) carries the inputs (`machine_id`, `machine_code`, `window_start`, `window_end`, `thresholds`) and a set of fields that start empty and are filled as rules run: `elevated`, `machine_rate`, `fleet_rate`, `dominant_defect`, `onset_time`, `affected_batch_ids`, `affected_batch_numbers`, `related_events`, `shared_lots`. Later rules read what earlier rules wrote; this is the only coupling between rules.
+`InvestigationContext` (`rules.py`) carries the inputs (`machine_id`, `machine_code`, `window_start`, `window_end`, `thresholds`) and a set of fields that start empty and are filled as rules run: `elevated`, `machine_rate`, `fleet_rate`, `dominant_defect`, `onset_time`, `cusum_onset_time`, `affected_batch_ids`, `affected_batch_numbers`, `related_events`, `shared_lots`. Later rules read what earlier rules wrote; this is the only coupling between rules.
 
 `RuleThresholds` holds the tunable constants:
 
@@ -44,6 +44,9 @@ flowchart LR
 | `elevated_fleet_multiple` | 2.0 | R1: and at least this multiple of the fleet rate (or the fleet rate is zero). |
 | `batch_review_rate` | 0.10 | R3 (hourly onset bucket) and R5 (batches requiring review). |
 | `event_lookback_hours` | 6 | R4: how far before the onset to look for machine events. |
+| `cusum_baseline_hours` | 3 | R7: the first hourly buckets whose pooled rate is the CUSUM reference `p0`; also the minimum number of hourly rows for the rule to run. |
+| `cusum_decision_interval` | 0.10 | R7: the CUSUM statistic signals when it reaches this value. |
+| `cusum_allowance` (property) | 0.025 | R7: the allowance `k`, defined as half of `elevated_min_rate`; hourly rates less than `k` above `p0` add nothing to the statistic. |
 
 The thresholds are not exposed through the API; `open_investigation` always uses the defaults.
 
@@ -57,11 +60,11 @@ A rule has the signature `rule(ctx: InvestigationContext, runner: QueryRunner) -
 
 ### Evidence cards
 
-`Evidence` is a frozen dataclass: `rule_code`, `title`, `narrative`, `query_name`, `query_sql`, `rows`. The service copies each card into an `investigation_evidence` row with a `sequence` number (1-based, unique per investigation), the SQL text in `query_sql`, and the rows in a JSON column `result_rows`. `investigation_service.evidence_payload` stores the rows as `{"columns": [...], "rows": [[...], ...]}` because MySQL reorders the keys of JSON objects; `EvidenceRead` rebuilds one ordered dictionary per row, so the API still returns a list of row objects, now in SQL column order. The API returns them in `InvestigationRead.evidence` ordered by sequence, so the frontend case board can show the query behind every finding.
+`Evidence` is a frozen dataclass: `rule_code`, `title`, `narrative`, `query_name`, `query_sql`, `rows`. The service copies each card into an `investigation_evidence` row with a `sequence` number (1-based, unique per investigation), the SQL text in `query_sql`, and the rows in a JSON column `result_rows`. `investigation_service.evidence_payload` stores the rows as `{"columns": [...], "rows": [[...], ...]}` because MySQL reorders the keys of JSON objects; `EvidenceRead` rebuilds one ordered dictionary per row, so the API still returns a list of row objects, now in SQL column order. The API returns them in `InvestigationRead.evidence` ordered by sequence, so the frontend case board can show the query behind every finding. For R1 to R6 the stored rows are exactly the query result; for R7 they are the query result plus two derived columns (`cusum`, `signal`) computed in Python by the formula stated in the R7 section, so rerunning the SQL reproduces the first four columns and the formula reproduces the last two.
 
 ### Summary builder
 
-`summary.build_summary(ctx)` assembles sentences from the context in a fixed order: machine rate versus fleet (with "elevated" only when R1 set the flag), dominant defect, onset time, the most recent preceding event, the number of affected batches (first five batch numbers listed), shared lots, and a closing line. The closing line is a recommendation to inspect the machine and tooling and review the listed batches when the rate is elevated, or "No action is indicated by the rules; continue routine monitoring." otherwise. If no rule produced a machine rate or any other finding the summary reads "No inspection data was found for the selected scope." The builder never introduces facts that the rules did not establish.
+`summary.build_summary(ctx)` assembles sentences from the context in a fixed order: machine rate versus fleet (with "elevated" only when R1 set the flag), dominant defect, onset time, one neutral sentence on whether the CUSUM onset from R7 falls in the same hour as the threshold-based onset or how many hours earlier or later it is (only when both exist), the most recent preceding event, the number of affected batches (first five batch numbers listed), shared lots, and a closing line. The closing line is a recommendation to inspect the machine and tooling and review the listed batches when the rate is elevated, or "No action is indicated by the rules; continue routine monitoring." otherwise. If no rule produced a machine rate or any other finding the summary reads "No inspection data was found for the selected scope." The builder never introduces facts that the rules did not establish.
 
 ### Persistence
 
@@ -69,7 +72,7 @@ A rule has the signature `rule(ctx: InvestigationContext, runner: QueryRunner) -
 
 `product_id` is stored on the investigation but no rule reads it; the rules scope by machine and window only.
 
-## Rules R1 to R6
+## Rules R1 to R7
 
 ### R1: Machine defect-rate comparison
 
@@ -120,6 +123,24 @@ A rule has the signature `rule(ctx: InvestigationContext, runner: QueryRunner) -
 - Narrative: "Affected batches share material lot(s): L203 (3 of 6 batches), ..." or "The affected batches do not share a material lot."
 - The rows include non-shared lots as well so the card shows the full picture.
 
+### R7: CUSUM onset detection
+
+- Query: `database/queries/investigation/hourly_defect_rates.sql` (`investigation.hourly_defect_rates`), parameters `machine_id`, `window_start`, `window_end`. One row per hourly bucket (same `DATE_FORMAT` bucketing as R3) with `inspected_count`, `failed_count`, `defect_rate`. Hours with no inspections produce no row.
+- Depends on R3 only for wording: it reads `onset_time` to compare the two estimates but runs whether or not R3 found an onset.
+- Formula: a one-sided upper CUSUM over the hourly defect rates `p_t`, in bucket order:
+
+  `S_0 = 0`, `S_t = max(0, S_{t-1} + (p_t - p0 - k))`, signal when `S_t >= h`.
+
+  `p0` is the reference rate, the machine's own pooled rate (`sum(failed) / sum(inspected)`) over the first `cusum_baseline_hours` (3) hourly rows, rounded to four places. `k` is the allowance, `cusum_allowance` = `elevated_min_rate / 2` = 0.025: an hour has to be at least 2.5 points above the reference to add anything to the statistic, which keeps single noisy hours from accumulating. `h` is the decision interval, `cusum_decision_interval` = 0.10. `S_t` is rounded to four places at every step, so the stored `cusum` column is the exact value used for the `signal` decision and can be recomputed by hand from the row above it. The statistic is accumulated over every hourly row, including the baseline hours; by construction those hours sit near `p0` and contribute little.
+- Why the machine's own first hours and not the fleet rate from R1: the question R7 answers is "when did this machine move away from how it was running", so the reference has to describe this machine. The fleet rate includes the machine under investigation (in the demo scenario the fleet rate is 3.6 percent while the healthy machines run at about 0.4 percent) and is undefined when R1 found no inspections, so it would make the statistic both biased and fragile.
+- Why `h` = 0.10: with `k` = 0.025 a single hour needs a rate of `p0 + 0.125` to signal on its own, or several consecutive hours a few points above the reference. On the seed 42 demo scenario CNC-03 reaches 0.1375 in the 10:00 bucket and signals; CNC-01 and CNC-02 never leave zero because no healthy hour is more than 2.5 points above the reference.
+- Writes to context: `cusum_onset_time` (the first signalling bucket start) when a signal exists; otherwise left unset.
+- Rows: the query rows plus `cusum` (float) and `signal` (boolean) per hour, in SQL column order followed by the two derived columns.
+- Narrative, signal: "One-sided CUSUM over <n> hourly defect rates (reference <p0> from the first 3 hours, allowance 2.5%, decision interval 10.0%). The statistic first reached <S> in the hour starting <bucket>, the same hour as | <n> hour(s) after | <n> hour(s) before the first hour at or above 10.0% found by R3 (<onset>). A CUSUM signal marks a sustained shift relative to the first hours of the window; it does not identify what changed." When R3 found no onset the middle clause reads "while R3 found no single hour at or above 10.0%".
+- Narrative, no signal: "... The statistic stayed below the decision interval in every hour, so no sustained shift away from the reference rate was detected." followed, when R3 did find an onset, by "R3 found an hour at or above 10.0% starting <onset>, but the accumulated excess over the reference never reached the decision interval."
+- Returns `None` when no machine is selected or when fewer than `cusum_baseline_hours` (3) hourly rows exist, because the reference could not be estimated.
+- Interpretation caveat: the CUSUM detects a sustained shift in the hourly defect rate relative to the first hours of the selected window. It is an association in time, like R3, and says nothing about the cause. If the fault was already present at the start of the window, the baseline absorbs it and the rule does not signal; widen the window backwards in that case. The bucketing caveats of R3 (calendar hours, absent empty hours, the last unit of a batch stamped in the next hour) apply equally. The statistic treats a 2-inspection hour and an 80-inspection hour alike; a very small bucket can move it by a lot, which is visible in the `inspected_count` column of the same row.
+
 ### Dependency chain
 
 | Rule | Reads from context | Writes to context | Returns `None` when |
@@ -130,6 +151,7 @@ A rule has the signature `rule(ctx: InvestigationContext, runner: QueryRunner) -
 | R4 | `onset_time` (R3) | `related_events` | no machine, or R3 found no onset |
 | R5 | thresholds | `affected_batch_ids`, `affected_batch_numbers` | never |
 | R6 | `affected_batch_ids` (R5) | `shared_lots` | R5 found no batches |
+| R7 | thresholds, `onset_time` (R3, wording only) | `cusum_onset_time` | no machine, or fewer than 3 hourly rows |
 
 The summary reads every field, so a missing earlier finding silently shortens the later narrative rather than failing.
 
@@ -162,7 +184,7 @@ The same diagram is kept as Mermaid source in `docs/media/diagrams/investigation
 flowchart TD
     A["Alert or dashboard shows a high defect rate"] --> B["Engineer opens an investigation:<br/>title, machine (optional), window"]
     B --> C["Service validates window and machine"]
-    C --> D["Rules R1 to R6 run in order<br/>against database/queries SQL"]
+    C --> D["Rules R1 to R7 run in order<br/>against database/queries SQL"]
     D --> E["Evidence cards: narrative + SQL + rows"]
     D --> F["Summary built from context<br/>(no causal claims)"]
     E --> G["Investigation stored OPEN with evidence<br/>and links to batches above 10%"]
@@ -196,8 +218,9 @@ An engineer opens an investigation with `machine_id` = CNC-03 and a window of 20
 4. R4 runs `investigation.machine_events_before_onset` with the onset bucket start and a six-hour lookback. The 08:00 `TOOL_WEAR` event is inside the lookback for any onset at or before 14:00, so it is listed; with a 10:00 onset `minutes_before_onset` is 120. The narrative names the event and adds that timing does not prove a cause.
 5. R5 runs `batches_requiring_review` with threshold 0.10 for CNC-03. Batches expected above 0.10 are those from about batch 8 onward (`SIM0001-CNC-03-03-B01` to `-B04`), worst first. None are quarantined yet, so all are listed and linked to the investigation.
 6. R6 runs `investigation.shared_material_lots` for the linked batches. If batches 8 to 11 are the affected set, L203 appears in three of them and L202 in two, so the narrative reports shared lots such as "L203 (3 of 6 batches), L202 (2 of 4 batches)". This is the deliberate trap in the scenario: the lots are shared because of the fixed rotation, not because the material is bad. The card gives the engineer the facts; R4's event evidence and the gradual, one-characteristic pattern in R2 and R3 are what point to the tool.
+7. R7 runs `investigation.hourly_defect_rates` for CNC-03. On a freshly seeded database the hourly rates are 0, 0, 0, 0.0125, 0.1625, 0.3875 and 0.5 (the last bucket holds two inspections), so `p0` = 0 from the 06:00 to 08:00 buckets, the 09:00 hour adds nothing (0.0125 is below the 0.025 allowance), and the statistic reaches 0.1375 at 10:00, 0.5 at 11:00 and 0.975 at 12:00. The signal is at 10:00, the same hour R3 reported, and the narrative says so. For CNC-01 the same window gives a reference of 0.4 percent and a statistic that stays at zero in every hour, so the card is present but reports no sustained shift.
 
-The summary then reads, in order: CNC-03 recorded an elevated defect rate (fleet rate quoted); Oversized diameter was the most frequent defect; the increase began around the onset hour; a TOOL_WEAR event was recorded some minutes earlier and the timing is consistent with a relationship but does not establish one; the batches above the review threshold; the shared lots; and the recommendation to inspect the machine and tooling and decide whether to quarantine the batches. The engineer quarantines the affected batches through `POST /api/v1/production-batches/{id}/quarantine` and closes the investigation with a conclusion such as "Tool wear on CNC-03 confirmed on inspection; tool replaced." The system never writes that sentence itself.
+The summary then reads, in order: CNC-03 recorded an elevated defect rate (fleet rate quoted); Oversized diameter was the most frequent defect; the increase began around the onset hour; the CUSUM onset estimate falls in the same hour; a TOOL_WEAR event was recorded some minutes earlier and the timing is consistent with a relationship but does not establish one; the batches above the review threshold; the shared lots; and the recommendation to inspect the machine and tooling and decide whether to quarantine the batches. The engineer quarantines the affected batches through `POST /api/v1/production-batches/{id}/quarantine` and closes the investigation with a conclusion such as "Tool wear on CNC-03 confirmed on inspection; tool replaced." The system never writes that sentence itself.
 
 ## Extension points
 
@@ -205,7 +228,7 @@ The summary then reads, in order: CNC-03 recorded an elevated defect rate (fleet
 
 1. Write the SQL under `database/queries/investigation/<name>.sql` with the documentation header convention used by the existing files (business question, tables, techniques, parameters, result). The loader picks it up automatically as `investigation.<name>`.
 2. If the query takes a list parameter, register it in `EXPANDING_PARAMS` in `repositories/query_runner.py`.
-3. Add a function `rule_<name>(ctx, runner) -> Evidence | None` in `rules.py` that runs the query, writes any shared findings to the context, and returns a card with a new rule code (`R7`, ...). Keep the wording associative, not causal.
+3. Add a function `rule_<name>(ctx, runner) -> Evidence | None` in `rules.py` that runs the query, writes any shared findings to the context, and returns a card with a new rule code (`R8`, ...). Keep the wording associative, not causal.
 4. Append it to `RULES` in the position that matches its dependencies; add any new context fields to `InvestigationContext` and, if they should be summarised, to `build_summary`.
 5. Unit test the rule with a fake `QueryRunner` and add an integration test against the seeded demo scenario.
 

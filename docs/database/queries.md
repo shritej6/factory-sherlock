@@ -20,8 +20,9 @@ This document explains each query and records real results obtained by running t
 | `investigation/defect_onset.sql` | `investigation.defect_onset` | rule R3 |
 | `investigation/machine_events_before_onset.sql` | `investigation.machine_events_before_onset` | rule R4 |
 | `investigation/shared_material_lots.sql` | `investigation.shared_material_lots` | rule R6 |
+| `investigation/hourly_defect_rates.sql` | `investigation.hourly_defect_rates` | rule R7 |
 
-"Dashboard" means `analytics_service.DASHBOARD_QUERIES`, served by `GET /analytics/queries/{name}` with `window_start`, `window_end`, `machine_id`, `threshold`, `hours`, and `limit` query parameters (defaults: a 30-day window ending tomorrow, threshold 0.10, hours 3, limit 50). The rules are in `backend/app/investigation/rules.py`. Investigation rules use `RuleThresholds` defaults: batch review rate 0.10, event lookback 6 hours, event comparison 3 hours.
+"Dashboard" means `analytics_service.DASHBOARD_QUERIES`, served by `GET /analytics/queries/{name}` with `window_start`, `window_end`, `machine_id`, `threshold`, `hours`, and `limit` query parameters (defaults: a 30-day window ending tomorrow, threshold 0.10, hours 3, limit 50). The rules are in `backend/app/investigation/rules.py`. Investigation rules use `RuleThresholds` defaults: batch review rate 0.10, event lookback 6 hours, event comparison 3 hours, CUSUM baseline 3 hours, allowance 0.025, decision interval 0.10.
 
 All time windows are half-open: `>= :window_start AND < :window_end`.
 
@@ -346,6 +347,36 @@ The onset bucket under the default threshold is 10:00, two hours after the tool-
 Lots L203 and L202 are shared among the flagged batches, but L203 was also used by three batches that were not flagged, and the dominant defect is oversize diameter following a tool-wear event; the engineer, not the query, decides what that means.
 
 **Performance.** `EXPLAIN`: `production_batches` as a `range` on the primary key for the `IN` list (4 rows), `batch_materials` by primary key prefix (Using index), lots by primary key; the total-usage subquery is a `DEPENDENT SUBQUERY` on the implicit `material_lot_id` index.
+
+## Investigation query: hourly_defect_rates
+
+**Business question.** Hour by hour, how many units did a machine inspect and how many failed, so that a statistical onset test can be run over the series?
+
+**Tables.** inspections, production_units, production_batches.
+
+**Techniques.** `DATE_FORMAT(i.inspected_at, '%Y-%m-%dT%H:00:00')` to bucket by hour (the same bucketing as `defect_onset`); conditional `SUM(i.result = 'FAIL')`; `ROUND(..., 4)` on the rate; half-open window. No window functions: the cumulative statistic is computed by rule R7 in Python so that the formula (reference, allowance, decision interval) is stated once, in `RuleThresholds`, rather than duplicated in SQL.
+
+**Parameters.** `:machine_id`, `:window_start`, `:window_end`.
+
+**Result.** One row per hour bucket, oldest first: `inspected_count`, `failed_count`, `defect_rate`. Hours with no inspections are simply absent; there is no calendar scaffold, so consecutive rows are not necessarily consecutive clock hours.
+
+**Used by.** Rule R7, which takes the pooled rate of the first three rows as the CUSUM reference, accumulates `max(0, S + defect_rate - reference - 0.025)` over the rows, and appends `cusum` and `signal` (`cusum >= 0.10`) to each row before storing them on the evidence card. The stored rows therefore have two more columns than the query returns.
+
+**Result captured** with `:machine_id = 3` and the window above:
+
+| bucket_start | inspected_count | failed_count | defect_rate |
+|--------------|----------------:|-------------:|------------:|
+| 2026-11-02T06:00:00 | 78 | 0 | 0.0000 |
+| 2026-11-02T07:00:00 | 80 | 0 | 0.0000 |
+| 2026-11-02T08:00:00 | 80 | 0 | 0.0000 |
+| 2026-11-02T09:00:00 | 80 | 1 | 0.0125 |
+| 2026-11-02T10:00:00 | 80 | 13 | 0.1625 |
+| 2026-11-02T11:00:00 | 80 | 31 | 0.3875 |
+| 2026-11-02T12:00:00 | 2 | 1 | 0.5000 |
+
+With these rows R7 computes a reference of 0.0000 from the first three hours and a statistic of 0, 0, 0, 0, 0.1375, 0.5, 0.975; the first signal is the 10:00 bucket, the same hour `defect_onset` reports under the 0.10 threshold.
+
+**Performance.** `EXPLAIN`: batches by `ix_production_batches_machine_time` (`ref`, const machine id, Using index), units by `uq_unit_batch_sequence` (Using index), inspections by `uq_inspection_unit_spec` with the time filter as `Using where`; one temporary table for the `GROUP BY` and a filesort for the ordering. The plan is the same as `defect_onset` without the window-function pass.
 
 ## Reproducing the results
 

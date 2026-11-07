@@ -1,10 +1,25 @@
 """Turns the investigation context into a short, careful written summary."""
 
+from datetime import datetime
+
 from app.investigation.rules import InvestigationContext
 
 
 def _pct(value: float | None) -> str:
     return "n/a" if value is None else f"{value * 100:.1f}%"
+
+
+def _onset_agreement(threshold_onset: datetime, cusum_onset: datetime) -> str:
+    """One neutral sentence on whether the two onset estimates coincide."""
+    hours = int((cusum_onset - threshold_onset).total_seconds() // 3600)
+    if hours == 0:
+        return "The CUSUM onset estimate falls in the same hour."
+    unit = "hour" if abs(hours) == 1 else "hours"
+    direction = "later" if hours > 0 else "earlier"
+    return (
+        f"The CUSUM onset estimate ({cusum_onset:%H:%M}) is {abs(hours)} {unit} {direction} "
+        "than the threshold-based onset."
+    )
 
 
 def build_summary(ctx: InvestigationContext) -> str:
@@ -25,6 +40,8 @@ def build_summary(ctx: InvestigationContext) -> str:
         parts.append(f"{ctx.dominant_defect} was the most frequent defect.")
     if ctx.onset_time:
         parts.append(f"The increase began around {ctx.onset_time:%Y-%m-%d %H:%M}.")
+    if ctx.onset_time and ctx.cusum_onset_time:
+        parts.append(_onset_agreement(ctx.onset_time, ctx.cusum_onset_time))
     if ctx.related_events:
         event = ctx.related_events[0]
         minutes = int(event["minutes_before_onset"])
