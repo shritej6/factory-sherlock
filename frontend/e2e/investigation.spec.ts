@@ -23,10 +23,11 @@ async function demoScope(request: APIRequestContext): Promise<{ machineId: numbe
   const machines = await apiGet<Machine[]>(request, token, '/machines');
   const cnc03 = machines.find((machine) => machine.code === 'CNC-03');
   if (!cnc03) throw new Error('The demo data has no machine CNC-03; seed the demo scenario.');
-  const batches = await apiGet<Batch[]>(request, token, '/production-batches', {
+  const batches = await apiGet<{ items: Batch[] }>(request, token, '/production-batches', {
     machine_id: cnc03.id,
+    limit: 500,
   });
-  const starts = batches.map((batch) => batch.started_at).sort();
+  const starts = batches.items.map((batch) => batch.started_at).sort();
   if (starts.length === 0) throw new Error('CNC-03 has no batches; seed the demo scenario.');
   return { machineId: cnc03.id, day: starts[0].slice(0, 10) };
 }
