@@ -42,6 +42,10 @@ Negative or accepted costs:
 - `POST /api/v1/analytics/alerts/{id}/acknowledge` requires the `Operator` dependency (OPERATOR, ENGINEER, ADMIN); a `VIEWER` receives 403. `tests/api/test_analytics_api.py::test_alerts_can_be_acknowledged_once_by_operators` covers this.
 - No route is admin-only, so ADMIN currently has the same permissions as ENGINEER.
 
+## Update 2026-11
+
+Login attempts are now throttled. `backend/app/core/throttle.py` keeps a sliding window of failed logins per lowercase username and per client address (`request.client.host`); after `LOGIN_MAX_FAILURES` (default 5) failures within `LOGIN_WINDOW_SECONDS` (default 900) the endpoint returns 429 `RateLimitedError` with `details.retry_after_seconds` and a `Retry-After` header, before any bcrypt work is done. A successful login clears the username's failures but not the address's. The store is in-process memory, chosen over a database table because the course deployment runs one API process and a table would add a write to every failed login; a shared store is the documented next step if more than one process is ever run. `X-Forwarded-For` is ignored because no trusted proxy setting exists. The behaviour, limits, and tests are described in `SECURITY.md` under "Login throttling" and in NFR-1.11.
+
 ## Alternatives considered
 
 - Server-side sessions with cookies. Rejected: cross-origin SPA setup with cookies needs CSRF handling and a session store; bearer tokens are simpler here.

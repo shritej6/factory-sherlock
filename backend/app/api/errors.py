@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.api.request_id import REQUEST_ID_HEADER, request_id_of
-from app.core.exceptions import AppError
+from app.core.exceptions import AppError, RateLimitedError
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +33,12 @@ def _response(
     error: str,
     message: str,
     details: dict[str, object] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     request_id = request_id_of(request)
     return JSONResponse(
         status_code=status,
-        headers={REQUEST_ID_HEADER: request_id},
+        headers={REQUEST_ID_HEADER: request_id, **(headers or {})},
         content={
             "error": error,
             "message": message,
@@ -59,7 +60,14 @@ def register_error_handlers(app: FastAPI) -> None:
                 "status": exc.status_code,
             },
         )
-        return _response(request, exc.status_code, type(exc).__name__, exc.message, exc.details)
+        headers = (
+            {"Retry-After": str(exc.retry_after_seconds)}
+            if isinstance(exc, RateLimitedError)
+            else None
+        )
+        return _response(
+            request, exc.status_code, type(exc).__name__, exc.message, exc.details, headers
+        )
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation(request: Request, exc: RequestValidationError) -> JSONResponse:

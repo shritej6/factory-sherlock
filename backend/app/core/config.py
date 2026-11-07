@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     jwt_access_token_minutes: int = 120
     jwt_algorithm: str = "HS256"
 
+    # Failed logins allowed per username and per client address within one
+    # sliding window before further attempts are rejected with 429.
+    login_max_failures: int = Field(default=5, ge=1)
+    login_window_seconds: int = Field(default=900, ge=1)
+
     seed_demo_password: str = Field(default="", repr=False)
     cors_origins: str = "http://localhost:5173"
 

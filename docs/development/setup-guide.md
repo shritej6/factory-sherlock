@@ -33,6 +33,8 @@ Edit `.env`. Every variable:
 | `MYSQL_ROOT_PASSWORD` | `change-me-root` | `docker-compose.yml` only | Root password of the Docker MySQL container. Not read by the application; the local script initialises root without a password. |
 | `JWT_SECRET_KEY` | placeholder | backend | HS256 signing key. Generate with `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Login fails with a 500 `InternalError` if it is empty. |
 | `JWT_ACCESS_TOKEN_MINUTES` | `120` | backend | Token lifetime. |
+| `LOGIN_MAX_FAILURES` | `5` | backend | Failed logins allowed per username and per client address before `POST /auth/login` returns 429. |
+| `LOGIN_WINDOW_SECONDS` | `900` | backend | Length of the sliding window for `LOGIN_MAX_FAILURES`. Counted in memory per API process. |
 | `SEED_DEMO_PASSWORD` | `change-me-demo` | `app.seed` | Password for the four demo accounts (`admin`, `engineer`, `operator`, `viewer`). The seed refuses to run without it. |
 | `CORS_ORIGINS` | `http://localhost:5173` | backend | Comma-separated browser origins allowed to call the API. |
 | `APP_ENV` | `development` | backend, Alembic, reset script | `development`, `test`, or `production`. `test` switches every tool to `<MYSQL_DATABASE>_test`. |
