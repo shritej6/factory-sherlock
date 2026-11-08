@@ -318,7 +318,7 @@ The full OpenAPI document (35 paths, 44 operations) is exported to [docs/api/ope
 
 ## Screenshots and video
 
-Only genuine captures of the running application are committed. The plan for which screens to capture and what the walkthrough video will show is in [docs/media/media-plan.md](docs/media/media-plan.md). Fourteen screenshots captured on 2026-11-07 with `scripts/development/capture_screenshots.py` (`make screenshots`; Playwright driving Chrome against the running application and the demo scenario) are stored in `docs/media/screenshots` and listed in that plan. Videos 2 to 6 exist as silent screen recordings made by `scripts/development/record_walkthroughs.py` (`make videos`) and committed in `docs/media/videos` under [ADR-0010](docs/decisions/ADR-0010-commit-short-walkthrough-videos.md); the narrated versions and video 1 (project overview) have not been recorded.
+Only genuine captures of the running application are committed. The plan for which screens to capture and what the walkthrough video will show is in [docs/media/media-plan.md](docs/media/media-plan.md). Fourteen screenshots captured on 2026-11-08 with `scripts/development/capture_screenshots.py` (`make screenshots`; Playwright driving Chrome against the running application and the demo scenario) are stored in `docs/media/screenshots` and listed in that plan. Videos 2 to 6 exist as silent screen recordings made by `scripts/development/record_walkthroughs.py` (`make videos`) and committed in `docs/media/videos` under [ADR-0010](docs/decisions/ADR-0010-commit-short-walkthrough-videos.md); the narrated versions and video 1 (project overview) have not been recorded.
 
 ## Implementation status
 

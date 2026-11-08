@@ -24,7 +24,7 @@ Positive:
 
 Negative or accepted costs:
 
-- Each re-recording adds the clip size to the repository history (10.4 MB for the five clips at the first recording). The limits above bound the growth; re-record only when the screens change.
+- Each re-recording adds the clip size to the repository history (10.4 MB for the five clips at the first recording on 2026-11-07, 10.2 MB at the re-recording on 2026-11-08 after the interface redesign). The limits above bound the growth; re-record only when the screens change.
 - Binary files do not diff. The README table (duration, size, date) is the only reviewable description of what changed.
 - The silent clips are not the final deliverable; the narrated versions still have to be produced and hosted outside the repository.
 
