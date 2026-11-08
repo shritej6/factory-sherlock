@@ -5,14 +5,18 @@ with the demo engineer account, and saves one PNG per screen. Nothing is
 synthesised: if a screen fails to load, the script exits non-zero instead of
 writing a placeholder.
 
-Prerequisites: the demo scenario is loaded (``make reset-demo``), the backend
-(``make backend``) and the frontend (``make frontend``) are running, and the
-Python ``playwright`` package is installed (``uv run --group docs``).
+Prerequisites: the demo scenario is loaded (``make reset-demo``), one
+investigation exists, batch ``SIM0001-CNC-02-02-B04`` has been started (see
+docs/quality/inspection-import.md), the backend and the frontend are running,
+and the Python ``playwright`` package is installed (``uv run --group docs``).
 
     cd backend && uv run --group docs python ../scripts/development/capture_screenshots.py
 
 Environment: SEED_DEMO_PASSWORD (read from the repository .env), FRONTEND_URL
 (default http://localhost:5173), SCREENSHOT_DIR (default docs/media/screenshots).
+
+The last capture signs in as ``viewer`` with a wrong password until the login
+throttle answers 429, so the viewer account is unusable for the next 15 minutes.
 """
 
 from __future__ import annotations
@@ -22,12 +26,16 @@ import re
 import sys
 from pathlib import Path
 
-from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import Browser, Page, sync_playwright
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = Path(os.environ.get("SCREENSHOT_DIR", REPO_ROOT / "docs" / "media" / "screenshots"))
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 VIEWPORT = {"width": 1600, "height": 1000}
+SAMPLE_CSV = REPO_ROOT / "database" / "seeds" / "sample_inspection_import.csv"
+SIZE_LIMIT_BYTES = 300 * 1024
+WRONG_PASSWORD = "not-the-demo-password"
+MAX_LOGIN_ATTEMPTS = 7
 
 
 def _demo_password() -> str:
@@ -48,7 +56,14 @@ def _shot(page: Page, name: str) -> None:
     page.wait_for_timeout(400)
     target = OUT_DIR / name
     page.screenshot(path=str(target), full_page=False)
-    print(f"captured {target.relative_to(REPO_ROOT)}")
+    size = target.stat().st_size
+    flag = "  (over 300 KB)" if size > SIZE_LIMIT_BYTES else ""
+    print(f"captured {target.relative_to(REPO_ROOT)} {size // 1024} KB{flag}")
+
+
+def _scroll_to(page: Page, selector: str, offset: int = 24) -> None:
+    page.locator(selector).first.evaluate("node => node.scrollIntoView({block: 'start'})")
+    page.evaluate(f"window.scrollBy(0, -{offset})")
 
 
 def _login(page: Page, password: str) -> None:
@@ -61,6 +76,117 @@ def _login(page: Page, password: str) -> None:
     page.wait_for_url(f"{FRONTEND_URL}/")
 
 
+def _capture_core_screens(page: Page) -> None:
+    _shot(page, "02-overview-dashboard.png")
+
+    page.goto(f"{FRONTEND_URL}/machines")
+    page.get_by_role("button", name=re.compile("CNC-03")).first.click()
+    _shot(page, "03-machines-events.png")
+
+    page.goto(f"{FRONTEND_URL}/orders")
+    _shot(page, "04-orders-and-batches.png")
+
+    page.goto(f"{FRONTEND_URL}/quality")
+    page.get_by_label("Result").select_option("FAIL")
+    _shot(page, "05-quality-inspections.png")
+
+
+def _capture_investigation(page: Page) -> bool:
+    page.goto(f"{FRONTEND_URL}/investigations")
+    page.wait_for_load_state("networkidle")
+    first_case = page.locator("a[href^='/investigations/']").first
+    if first_case.count() == 0:
+        print("no investigation found; open one through the UI or the API first", file=sys.stderr)
+        return False
+    first_case.click()
+    page.wait_for_load_state("networkidle")
+    show_sql = page.get_by_role("button", name="Show the SQL").first
+    show_sql.wait_for()
+    show_sql.click()
+    _shot(page, "06-investigation-case-board.png")
+    return True
+
+
+def _capture_traceability(page: Page) -> None:
+    page.goto(f"{FRONTEND_URL}/traceability")
+    page.get_by_label("Lot number").fill("L203")
+    page.get_by_role("button", name="Trace lot").click()
+    page.wait_for_load_state("networkidle")
+    page.get_by_label("Serial number").fill("SIM0001-CNC-03-03-B04-U0001")
+    page.get_by_role("button", name="Trace unit").click()
+    _shot(page, "07-traceability-and-quarantine.png")
+
+
+def _capture_analytics(page: Page) -> None:
+    page.goto(f"{FRONTEND_URL}/analytics")
+    _shot(page, "08-analytics-charts.png")
+    page.get_by_label("Query").select_option("batches_requiring_review")
+    page.get_by_role("button", name="Run query").click()
+    page.wait_for_load_state("networkidle")
+    rows = page.locator("section[aria-label='SQL explorer'] tbody tr")
+    rows.last.evaluate("node => node.scrollIntoView({block: 'end'})")
+    page.evaluate("window.scrollBy(0, 24)")
+    _shot(page, "09-analytics-sql-explorer.png")
+
+
+def _capture_csv_import(page: Page) -> None:
+    """Imports the sample file through the UI; a re-run shows the duplicate-row errors instead."""
+    page.goto(f"{FRONTEND_URL}/quality")
+    page.get_by_role("button", name="Import inspections from CSV").click()
+    page.get_by_label("CSV file").set_input_files(str(SAMPLE_CSV))
+    page.get_by_role("button", name="Import", exact=True).click()
+    imported = page.get_by_text(re.compile(r"^Imported \d+ inspection"))
+    imported.or_(page.get_by_role("alert")).first.wait_for()
+    _scroll_to(page, "form[aria-label='Import inspections from CSV']", offset=72)
+    _shot(page, "10-quality-csv-import.png")
+
+
+def _capture_control_chart(page: Page) -> None:
+    page.goto(f"{FRONTEND_URL}/analytics")
+    page.wait_for_load_state("networkidle")
+    chart = page.locator("section[aria-label='Control chart']")
+    chart.get_by_label("Specification").select_option(label="METAL-BRACKET hole_position (mm)")
+    chart.get_by_label("Machine").select_option(label="CNC-02")
+    page.wait_for_load_state("networkidle")
+    _scroll_to(page, "section[aria-label='Control chart']")
+    _shot(page, "11-analytics-control-chart.png")
+
+
+def _capture_batches_filter(page: Page) -> None:
+    page.goto(f"{FRONTEND_URL}/batches")
+    page.get_by_label("Status", exact=True).select_option("COMPLETED")
+    page.get_by_label("Rows per page").select_option("25")
+    page.wait_for_load_state("networkidle")
+    page.get_by_role("button", name="Next page").click()
+    _shot(page, "12-batches-status-filter.png")
+
+
+def _capture_overdue_check(page: Page) -> None:
+    page.goto(f"{FRONTEND_URL}/")
+    page.wait_for_load_state("networkidle")
+    page.get_by_role("button", name="Check overdue orders").click()
+    page.get_by_text(re.compile(r"^Checked \d+ open order")).wait_for()
+    _shot(page, "13-overview-overdue-check.png")
+
+
+def _capture_login_throttled(browser: Browser) -> None:
+    """Fresh context, wrong viewer password until the server answers 429. Run this last."""
+    page = browser.new_page(viewport=VIEWPORT, color_scheme="light")
+    page.goto(f"{FRONTEND_URL}/login")
+    login_response = re.compile(r"/api/v1/auth/login$")
+    for _ in range(MAX_LOGIN_ATTEMPTS):
+        page.get_by_label("Username").fill("viewer")
+        page.get_by_label("Password").fill(WRONG_PASSWORD)
+        with page.expect_response(login_response) as response:
+            page.get_by_role("button", name="Sign in").click()
+        if response.value.status == 429:
+            break
+        page.wait_for_timeout(300)
+    page.get_by_text(re.compile("Too many attempts")).wait_for()
+    _shot(page, "14-login-throttled.png")
+    page.context.close()
+
+
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     password = _demo_password()
@@ -68,53 +194,18 @@ def main() -> int:
         browser = playwright.chromium.launch(executable_path=_chrome_path())
         page = browser.new_page(viewport=VIEWPORT, color_scheme="light")
         _login(page, password)
-        _shot(page, "02-overview-dashboard.png")
-
-        page.goto(f"{FRONTEND_URL}/machines")
-        page.get_by_role("button", name=re.compile("CNC-03")).first.click()
-        _shot(page, "03-machines-events.png")
-
-        page.goto(f"{FRONTEND_URL}/orders")
-        _shot(page, "04-orders-and-batches.png")
-
-        page.goto(f"{FRONTEND_URL}/quality")
-        page.get_by_label("Result").select_option("FAIL")
-        _shot(page, "05-quality-inspections.png")
-
-        page.goto(f"{FRONTEND_URL}/investigations")
-        page.wait_for_load_state("networkidle")
-        first_case = page.locator("a[href^='/investigations/']").first
-        if first_case.count() == 0:
-            print(
-                "no investigation found; open one through the UI or the API first", file=sys.stderr
-            )
+        _capture_core_screens(page)
+        if not _capture_investigation(page):
             browser.close()
             return 1
-        first_case.click()
-        page.wait_for_load_state("networkidle")
-        show_sql = page.get_by_role("button", name="Show the SQL").first
-        show_sql.wait_for()
-        show_sql.click()
-        _shot(page, "06-investigation-case-board.png")
-
-        page.goto(f"{FRONTEND_URL}/traceability")
-        page.get_by_label("Lot number").fill("L203")
-        page.get_by_role("button", name="Trace lot").click()
-        page.wait_for_load_state("networkidle")
-        page.get_by_label("Serial number").fill("SIM0001-CNC-03-03-B04-U0001")
-        page.get_by_role("button", name="Trace unit").click()
-        _shot(page, "07-traceability-and-quarantine.png")
-
-        page.goto(f"{FRONTEND_URL}/analytics")
-        _shot(page, "08-analytics-charts.png")
-        page.get_by_label("Query").select_option("batches_requiring_review")
-        page.get_by_role("button", name="Run query").click()
-        page.wait_for_load_state("networkidle")
-        page.get_by_role("heading", name="SQL Explorer").evaluate(
-            "node => node.closest('section').scrollIntoView({block: 'start'})"
-        )
-        page.evaluate("window.scrollBy(0, -24)")
-        _shot(page, "09-analytics-sql-explorer.png")
+        _capture_traceability(page)
+        _capture_analytics(page)
+        _capture_csv_import(page)
+        _capture_control_chart(page)
+        _capture_batches_filter(page)
+        _capture_overdue_check(page)
+        page.context.close()
+        _capture_login_throttled(browser)
         browser.close()
     return 0
 

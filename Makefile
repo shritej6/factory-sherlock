@@ -14,7 +14,7 @@ PNPM := pnpm
 
 .PHONY: help db-init db-start db-stop migrate seed seed-demo reset-demo backend frontend \
 	test-backend test-frontend benchmark-sim lint format export-schema export-openapi render-diagrams render-figures check-docs \
-	check-overdue
+	check-overdue screenshots videos
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z0-9_-]+:.*## ' $(MAKEFILE_LIST) | sort | awk -F ':.*## ' '{ printf "  %-16s %s\n", $$1, $$2 }'
@@ -84,6 +84,12 @@ render-diagrams: ## Render docs/media/diagrams/*.mmd to SVG with Playwright (ins
 
 render-figures: ## Render the Mermaid blocks in docs/milestones/*.md to PNG figures for the DOCX and PDF builds
 	cd $(BACKEND_DIR) && $(UV) run --group docs python ../scripts/development/render_milestone_figures.py
+
+screenshots: ## Re-capture docs/media/screenshots/*.png from the running app with Playwright (see docs/media/media-plan.md for the required state)
+	cd $(BACKEND_DIR) && $(UV) run --group docs python ../scripts/development/capture_screenshots.py
+
+videos: ## Record the silent walkthrough videos into docs/media/videos with Playwright and ffmpeg (writes to the database)
+	cd $(BACKEND_DIR) && $(UV) run --group docs python ../scripts/development/record_walkthroughs.py
 
 export-openapi: ## Write the OpenAPI document to docs/api/openapi.json
 	cd $(BACKEND_DIR) && $(UV) run python ../scripts/development/export_openapi.py

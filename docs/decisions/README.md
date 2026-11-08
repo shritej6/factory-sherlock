@@ -17,6 +17,7 @@ Every ADR follows the same sections: Status, Context, Decision, Consequences, Al
 | [ADR-0007](ADR-0007-jwt-roles-and-least-privilege-db-user.md) | JWT authentication with four roles and a least-privilege database user | Accepted | `backend/app/core/security.py`, `backend/app/api/deps.py`, `scripts/setup/init_databases.sh` |
 | [ADR-0008](ADR-0008-uv-and-pnpm-toolchains.md) | uv for the Python backend and pnpm for the frontend | Accepted | `backend/pyproject.toml`, `backend/uv.lock`, `frontend/package.json`, `frontend/pnpm-lock.yaml` |
 | [ADR-0009](ADR-0009-cusum-onset-rule.md) | CUSUM onset detection as a seventh rule, not a model | Accepted | `backend/app/investigation/rules.py`, `database/queries/investigation/hourly_defect_rates.sql` |
+| [ADR-0010](ADR-0010-commit-short-walkthrough-videos.md) | Commit short silent walkthrough videos | Accepted | `scripts/development/record_walkthroughs.py`, `docs/media/videos/` |
 
 ## Writing a new record
 
