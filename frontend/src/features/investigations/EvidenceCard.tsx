@@ -11,7 +11,7 @@ export function EvidenceCard({ evidence }: { evidence: Evidence }) {
       data-testid="evidence-card"
     >
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span className="rounded-sm bg-accent-soft px-1.5 py-0.5 font-mono text-xs font-semibold text-accent">
+        <span className="border border-accent bg-accent-soft px-1.5 py-0.5 font-mono text-xs font-semibold text-accent">
           {evidence.rule_code}
         </span>
         <h3 id={`evidence-${evidence.id}-title`} className="text-sm font-semibold text-ink">

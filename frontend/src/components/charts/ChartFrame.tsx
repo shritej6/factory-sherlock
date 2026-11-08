@@ -32,7 +32,9 @@ export function ChartFrame({
   return (
     <figure className="panel p-4">
       <figcaption className="mb-3">
-        <Heading className="text-sm font-semibold text-ink">{title}</Heading>
+        <Heading className="font-display text-[15px] leading-tight font-semibold tracking-wide text-ink">
+          {title}
+        </Heading>
         {description && <p className="text-xs text-ink-muted">{description}</p>}
       </figcaption>
       {empty ? (

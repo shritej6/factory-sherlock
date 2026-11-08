@@ -44,7 +44,7 @@ export function MachinesPage() {
                     type="button"
                     aria-current={machine.id === selectedId ? 'true' : undefined}
                     onClick={() => setParams({ machine: String(machine.id) })}
-                    className={`flex w-full items-center justify-between gap-2 rounded-panel border px-3 py-2 text-left text-sm ${machine.id === selectedId ? 'border-accent bg-accent-soft' : 'border-transparent hover:bg-surface-muted'}`}
+                    className={`flex w-full items-center justify-between gap-2 border px-3 py-2 text-left text-sm ${machine.id === selectedId ? 'border-accent bg-accent-soft' : 'border-transparent hover:bg-surface-muted'}`}
                   >
                     <span>
                       <span className="block font-mono font-semibold text-ink">{machine.code}</span>

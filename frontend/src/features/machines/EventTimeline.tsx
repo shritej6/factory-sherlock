@@ -14,7 +14,7 @@ export function EventTimeline({ events }: { events: MachineEvent[] }) {
         <li key={event.id} className="relative pb-4 last:pb-0">
           <span
             aria-hidden="true"
-            className="absolute top-1.5 -left-[21px] h-2.5 w-2.5 rounded-full border-2 border-surface bg-ink-faint"
+            className="absolute top-1.5 -left-[21px] h-2.5 w-2.5 border-2 border-surface bg-ink-faint"
           />
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-xs text-ink-muted">

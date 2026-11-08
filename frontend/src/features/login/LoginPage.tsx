@@ -50,12 +50,16 @@ export function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="panel w-full max-w-sm p-6">
-        <h1 className="text-lg font-semibold tracking-tight text-ink">Factory Sherlock</h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          Sign in to the production intelligence console.
-        </p>
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4" noValidate>
+      <div className="panel w-full max-w-sm">
+        <div className="border-b-2 border-border-strong bg-surface-muted px-6 py-4">
+          <h1 className="font-display text-2xl leading-none font-bold tracking-wider text-ink uppercase">
+            Factory Sherlock
+          </h1>
+          <p className="mt-1.5 text-sm text-ink-muted">
+            Sign in to the production intelligence console.
+          </p>
+        </div>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-6 py-5" noValidate>
           <TextField
             label="Username"
             name="username"
@@ -82,10 +86,11 @@ export function LoginPage() {
           >
             Sign in
           </Button>
+          <p className="text-xs text-ink-faint">
+            Demo accounts: admin, engineer, operator, viewer. Ask the administrator for the
+            password.
+          </p>
         </form>
-        <p className="mt-4 text-xs text-ink-faint">
-          Demo accounts: admin, engineer, operator, viewer. Ask the administrator for the password.
-        </p>
       </div>
     </main>
   );

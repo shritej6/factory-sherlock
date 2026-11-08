@@ -35,7 +35,7 @@ export function SqlDisclosure({ sql, queryName, params }: SqlDisclosureProps) {
               </code>
             </p>
           )}
-          <pre className="max-h-80 overflow-auto rounded-panel border border-border bg-surface-muted p-3 font-mono text-xs leading-relaxed whitespace-pre text-ink">
+          <pre className="max-h-80 overflow-auto border border-border bg-canvas p-3 font-mono text-xs leading-relaxed whitespace-pre text-ink">
             {sql}
           </pre>
         </div>

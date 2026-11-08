@@ -15,7 +15,7 @@ export function LoadingState({ label = 'Loading' }: { label?: string }) {
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="rounded-panel border border-dashed border-border px-4 py-8 text-center">
+    <div className="border border-dashed border-border-strong px-4 py-8 text-center">
       <p className="text-sm font-medium text-ink">{title}</p>
       {hint && <p className="mt-1 text-xs text-ink-muted">{hint}</p>}
     </div>
@@ -40,7 +40,7 @@ export function ErrorState({
   return (
     <div
       role="alert"
-      className="rounded-panel border border-status-fault bg-status-fault-soft px-4 py-3 text-sm text-ink"
+      className="border border-l-4 border-status-fault bg-status-fault-soft px-4 py-3 text-sm text-ink"
     >
       <p className="font-medium">{title}</p>
       <p className="mt-1 text-ink-muted">{describeError(error)}</p>
@@ -69,7 +69,7 @@ export function InlineNotice({
   return (
     <div
       role={tone === 'error' ? 'alert' : 'status'}
-      className={`rounded-panel border px-3 py-2 text-sm text-ink ${classes}`}
+      className={`border border-l-4 px-3 py-2 text-sm text-ink ${classes}`}
     >
       {children}
     </div>

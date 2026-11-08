@@ -18,17 +18,19 @@ export function MachineStatusCard({ machine }: { machine: Machine }) {
   return (
     <Link
       to={`/machines?machine=${machine.id}`}
-      className={`panel block border-l-4 px-4 py-3 hover:bg-surface-muted ${EDGE_CLASSES[toneFor(machine.status)]}`}
+      className={`panel block border-l-4 px-4 py-3 hover:border-border-strong ${EDGE_CLASSES[toneFor(machine.status)]}`}
       data-testid="machine-card"
     >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="font-mono text-sm font-semibold text-ink">{machine.code}</p>
-          <p className="text-xs text-ink-muted">{machine.name}</p>
+          <p className="font-display text-xl leading-none font-semibold text-ink">{machine.code}</p>
+          <p className="mt-1 text-xs text-ink-muted">{machine.name}</p>
         </div>
         <StatusBadge status={machine.status} />
       </div>
-      <p className="mt-2 text-xs text-ink-faint">Updated {formatDateTime(machine.updated_at)}</p>
+      <p className="mt-2 font-mono text-[11px] text-ink-faint">
+        Updated {formatDateTime(machine.updated_at)}
+      </p>
     </Link>
   );
 }

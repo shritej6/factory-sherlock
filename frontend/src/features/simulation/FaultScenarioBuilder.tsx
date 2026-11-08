@@ -29,7 +29,7 @@ export function FaultScenarioBuilder({ machines, faults, onChange }: FaultScenar
       {faults.map((fault, index) => (
         <div
           key={index}
-          className="grid grid-cols-1 gap-2 rounded-panel border border-border p-3 md:grid-cols-[1fr_1fr_140px_auto] md:items-end"
+          className="grid grid-cols-1 gap-2 border border-border p-3 md:grid-cols-[1fr_1fr_140px_auto] md:items-end"
         >
           <SelectField
             label={`Machine ${index + 1}`}

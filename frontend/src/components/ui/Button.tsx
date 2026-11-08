@@ -11,16 +11,17 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   ref?: Ref<HTMLButtonElement>;
 }
 
+/** Every variant but ghost is a raised key; primary is the amber key. */
 const VARIANT_CLASSES: Record<Variant, string> = {
-  primary: 'bg-accent text-on-accent border-accent hover:bg-accent-strong',
-  secondary: 'bg-surface text-ink border-border-strong hover:bg-surface-muted',
-  danger: 'bg-surface text-status-fault border-status-fault hover:bg-status-fault-soft',
-  ghost: 'bg-transparent text-accent border-transparent hover:bg-accent-soft',
+  primary: 'key border-accent bg-accent text-on-accent hover:bg-accent-strong',
+  secondary: 'key text-ink hover:border-ink-faint',
+  danger: 'key text-status-fault hover:bg-status-fault-soft',
+  ghost: 'border border-transparent bg-transparent text-accent hover:bg-accent-soft',
 };
 
 const SIZE_CLASSES: Record<Size, string> = {
-  sm: 'px-2.5 py-1 text-xs',
-  md: 'px-3.5 py-2 text-sm',
+  sm: 'h-7 px-2.5 text-[13px]',
+  md: 'h-9 px-3.5 text-sm',
 };
 
 export function Button({
@@ -38,7 +39,7 @@ export function Button({
       type={type}
       disabled={disabled || busy}
       aria-busy={busy || undefined}
-      className={`inline-flex items-center justify-center gap-2 rounded-panel border font-medium transition-colors motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-60 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 font-display font-semibold tracking-wide transition-colors motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-60 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
       {...rest}
     >
       {children}

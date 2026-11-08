@@ -55,7 +55,7 @@ export function BatchesPage() {
       header: 'Batch',
       render: (b) => (
         <span
-          className={`font-mono font-medium ${b.id === highlightedId ? 'rounded-sm bg-accent-soft px-1 text-accent' : ''}`}
+          className={`font-mono font-medium ${b.id === highlightedId ? 'bg-accent-soft px-1 text-accent' : ''}`}
         >
           {b.batch_number}
         </span>

@@ -32,17 +32,17 @@ test.describe('login', () => {
     await expect(page.getByRole('heading', { name: 'Factory Sherlock' })).toBeVisible();
   });
 
-  test('the engineer lands on the overview and the sidebar lists the nine sections', async ({
+  test('the engineer lands on the overview and the soft keys list the nine sections', async ({
     page,
   }) => {
     await signInThroughForm(page, 'engineer');
 
     await expect(page).toHaveURL(/\/$/);
-    const sidebar = page.getByRole('complementary', { name: 'Sidebar' });
-    await expect(sidebar.getByRole('navigation', { name: 'Primary' }).getByRole('link')).toHaveText(
+    await expect(page.getByRole('navigation', { name: 'Primary' }).getByRole('link')).toHaveText(
       SECTIONS,
     );
-    await expect(sidebar.getByText('engineer', { exact: true })).toBeVisible();
-    await expect(sidebar.getByText('Engineer', { exact: true })).toBeVisible();
+    const band = page.getByRole('banner');
+    await expect(band.getByText('engineer', { exact: true })).toBeVisible();
+    await expect(band.getByText('Engineer', { exact: true })).toBeVisible();
   });
 });

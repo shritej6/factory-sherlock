@@ -22,10 +22,13 @@ export function Panel({
   return (
     <Tag className={`panel ${className}`} aria-labelledby={title ? headingId : undefined}>
       {(title || actions) && (
-        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-muted px-4 py-2">
           <div>
             {title && (
-              <h2 id={headingId} className="text-sm font-semibold text-ink">
+              <h2
+                id={headingId}
+                className="font-display text-[15px] leading-tight font-semibold tracking-wide text-ink"
+              >
                 {title}
               </h2>
             )}
