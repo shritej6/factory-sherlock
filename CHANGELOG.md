@@ -17,7 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - Fourteen documented SQL queries under `database/queries/`: ten numbered reporting, traceability, and control chart queries (eight runnable through `GET /analytics/queries/{name}`) and four investigation queries executed by the engine through bound parameters.
 - Seed command `python -m app.seed` that loads reference data from `database/seeds/01_reference_data.sql`, creates the demo accounts, and optionally runs the demo scenario from `database/seeds/demo_scenario.json`; reset script `scripts/development/reset_database.py` that drops all tables and rebuilds from migrations.
 - Developer scripts to export the schema (`scripts/development/export_schema.sh`) and the OpenAPI document (`scripts/development/export_openapi.py`).
-- Documentation set under `docs/`: architecture, API export, database, simulation, investigation, quality, requirements, development, testing, ten decision records, milestones, media (fourteen screenshots and five silent walkthrough clips with the scripts that produce them), and AI evidence.
+- Documentation set under `docs/`: architecture, API export, database, simulation, investigation, quality, requirements, development, testing, eleven decision records, milestones, media (fourteen screenshots and five silent walkthrough clips with the scripts that produce them), and AI evidence.
 - Governance and CI: five GitHub Actions workflows (Backend CI, Frontend CI, Docs Lint, Compose Smoke, End-to-End); pull request and issue templates; `CONTRIBUTING.md`; `SECURITY.md`; and a root `Makefile` wrapping the development commands.
 - Frontend under `frontend/` (React 19, TypeScript, Vite 7, Tailwind 4, TanStack Query, Recharts): login, overview, machines, orders, batches, inspections, traceability, investigations with the show-the-SQL case board, analytics with the SQL explorer, and simulation screens; 118 Vitest tests in 25 files.
 - Pagination on the six list endpoints (`production-orders`, `production-batches`, `inspections`, `investigations`, `machines/{id}/events`, `analytics/alerts`): `limit` 1 to 500 (default 50), `offset` at most 1,000,000, response `{items, total, limit, offset}` (`repositories/pagination.py`, `schemas/common.py::Page`); paged tables in the frontend.
@@ -32,9 +32,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - Playwright end-to-end suite in `frontend/e2e` (9 tests in 5 spec files: login, roles, investigation, traceability, analytics) with `pnpm test:e2e`, run in CI by the End-to-End workflow against a seeded MySQL service; Compose Smoke workflow for the Docker Compose path.
 - Benchmarks: `scripts/development/benchmark_simulation.py` (`make benchmark-sim`) and `scripts/development/benchmark_inspection_import.py`.
 - Backend tests for every feature above: 481 tests collected (254 unit, 174 API, 53 integration).
+- Status band (`frontend/src/app/StatusBand.tsx`) across the top of every screen: product name, one lamp per machine with its code and state, a live clock, the signed-in user and role, and Sign out.
+- Soft-key navigation (`frontend/src/app/SoftKeyBar.tsx`): a sticky bar with one key per section of `nav.ts`, labelled "Primary"; the row scrolls horizontally on narrow screens.
+- Self-hosted fonts through `@fontsource/barlow`, `@fontsource/barlow-condensed`, and `@fontsource/jetbrains-mono`, imported in `frontend/src/main.tsx`; nothing loads from a CDN.
+- ADR-0011, the black industrial control panel interface (`docs/decisions/ADR-0011-industrial-control-panel-interface.md`).
 
 ### Changed
 
+- The interface is one black industrial control panel (ADR-0011, `frontend/src/styles/index.css`): black field, square panels and keys with a one-pixel bevel, amber as the only chrome colour, and red, green, and the other state colours reserved for live status. It replaces the light theme and the `prefers-color-scheme` dark-mode overrides; `StatTile`, `StatusBadge`, `Panel`, tables, `EmptyState`, notices, and the chart palette in `utils/chartTheme.ts` follow the same rules.
+- Primary navigation moved from the left sidebar to the soft-key bar. `AppLayout.test.tsx` and the login Playwright spec assert the soft keys and the status band instead of the sidebar.
 - List endpoints return the page envelope instead of a bare array; clients must read `items`.
 - `POST /analytics/alerts/checks/overdue-orders` takes no request body; the server clock is the check date (`OverdueCheckRequest` removed). The command keeps `--as-of` to replay a past check.
 - Query 10 computes `ucl` and `lcl` per row from that row's `sample_count`; the frontend reads the limits from every row and draws them as stepped lines.
@@ -44,6 +50,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - Frontend lookups: order counts come from `GET /production-orders/status-counts`, the open investigation count from a filtered `total`, batch status filtering from the server; the batch table reads `order_number` from each row.
 - Login page shows the wait from `details.retry_after_seconds` on a 429.
 
+### Removed
+
+- The mobile navigation drawer and its Menu button (`frontend/src/app/Sidebar.tsx`, `frontend/src/hooks/useMediaQuery.ts`). The soft-key row scrolls horizontally on narrow screens instead.
+- The light theme and the dark-mode overrides in `frontend/src/styles/index.css`.
+
 ### Fixed
 
 - Login throttle: failures by one user no longer lock other users behind the same address; `ADMIN`, `admin`, and accented spellings share one account bucket; concurrent checks cannot exceed the limit (pending reservation); a missing peer address skips the address dimension.
@@ -52,7 +63,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - Error mapping: MySQL 3819 (CHECK violation) and 1406 (data too long) return 422, connection errors and pool timeouts return 503 "The database is not reachable", other operational errors 503 "The database is unavailable".
 - CSV import: malformed CSV structure returns 422 instead of 500; row numbers stay correct when a quoted field spans lines; a unit and characteristic recorded by another import between validation and write returns a 422 row error instead of a 409.
 - Frontend: pagination clamps to the last page with rows when the offset passes `total`; mutation errors keep the request id (`ErrorNotice`); the control chart panel reports a failed machine list inline; the overdue check button sends no body.
-- Accessibility: the mobile drawer moves focus to its first link and returns it to the Menu button; disclosures and inline row forms return focus to their trigger when they close; the `nav` landmark is labelled "Primary" and the `aside` "Sidebar"; chart titles use the right heading level; row actions carry the batch or alert number in their accessible name; muted text and the request id line meet 4.5:1 contrast in both themes.
+- Accessibility (before the 2026-11-08 interface redesign, which removed the drawer and the sidebar): the mobile drawer moves focus to its first link and returns it to the Menu button; disclosures and inline row forms return focus to their trigger when they close; the `nav` landmark is labelled "Primary" and the `aside` "Sidebar"; chart titles use the right heading level; row actions carry the batch or alert number in their accessible name; muted text and the request id line meet 4.5:1 contrast in both themes.
 
 ### Performance
 

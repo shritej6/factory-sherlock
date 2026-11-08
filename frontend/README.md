@@ -38,7 +38,7 @@ Sign in with one of the seeded accounts (`admin`, `engineer`, `operator`, `viewe
 
 ```
 src/
-  app/          router, providers, query client, layout, sidebar, auth guard
+  app/          router, providers, query client, layout (status band, soft-key bar), auth guard
   components/   ui (buttons, panels, fields, tables, badges, SQL disclosure, states)
                 charts (Recharts wrappers with a shared frame)
   features/     one folder per screen: login, overview, machines, orders, batches,
@@ -47,7 +47,7 @@ src/
   services/     typed fetch client (http.ts) and endpoint modules (api.ts)
   types/        API types mirrored from the OpenAPI contract, enums and defaults
   utils/        error mapping, permissions, state machines, formatting, chart transforms
-  styles/       Tailwind entry and design tokens (light theme with dark-mode overrides)
+  styles/       Tailwind entry and design tokens (one black theme, amber as the only chrome colour)
 tests/          Vitest setup and shared render helpers
 ```
 
@@ -80,7 +80,9 @@ Order counts come from `GET /production-orders/status-counts`, one integer per o
 
 The control chart (query 10, `characteristic_control_chart`) returns `ucl` and `lcl` per subgroup: `grand_mean` plus or minus three pooled standard deviations divided by the square root of that subgroup's `sample_count`, so small subgroups get wider limits. `toControlChartSeries` in `utils/chartTransforms.ts` reads the limits from each row, marks a point out of control against its own limits, and the chart draws them as stepped lines (`type="stepAfter"`) around a straight grand mean reference line. `grand_mean`, `target_value`, and the specification limits are constant for the response and are read once.
 
-Accessibility: a "Skip to content" link is the first focusable element, the document title and keyboard focus follow the page heading on every route change, the mobile navigation drawer moves focus to its first link when it opens, is inert when closed, and closes on Escape with focus returned to the Menu button; the `nav` landmark is labelled "Primary" and the `aside` "Sidebar"; disclosures and inline row forms return focus to their trigger when they close; repeated row actions (complete, quarantine, acknowledge) carry the batch or alert number in their accessible name; charts have data table alternatives; text colours meet WCAG 2.1 AA contrast in the light and dark themes.
+Accessibility: a "Skip to content" link is the first focusable element, the document title and keyboard focus follow the page heading on every route change, the layout exposes the landmarks banner (status band), main, navigation "Primary" (soft-key bar), and contentinfo; disclosures and inline row forms return focus to their trigger when they close; repeated row actions (complete, quarantine, acknowledge) carry the batch or alert number in their accessible name; charts have data table alternatives; text colours meet WCAG 2.1 AA contrast on the single black theme (the lowest pair in use, muted text on a key, is 6.0:1).
+
+Interface: the look follows a CNC control pendant, recorded in [ADR-0011](../docs/decisions/ADR-0011-industrial-control-panel-interface.md). `AppLayout.tsx` renders `StatusBand.tsx` (product name, one lamp per machine with its code and state, a live clock, the user and role, Sign out) above the page and `SoftKeyBar.tsx` (one key per section of `nav.ts`) below it. On narrow screens the soft-key row scrolls horizontally; there is no drawer. Barlow Condensed, Barlow, and JetBrains Mono are self-hosted through the `@fontsource` packages imported in `src/main.tsx`, so nothing loads from a CDN.
 
 Default analytics and investigation windows are 2026-11-01 to 2026-11-05 because the seeded demonstration data is dated 2026-11-02 (one production day, 06:00 to 12:00). The windows are editable on every screen that uses them.
 

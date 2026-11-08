@@ -30,7 +30,7 @@ Scope: system overview, component design, data flow, repository structure, archi
 
 Present: `docs/architecture/system-overview.md`; this documentation set (`docs/simulation/`, `docs/investigation/`, `docs/requirements/`, `docs/testing/`, `docs/development/`, `docs/media/`, `docs/quality/`).
 
-Also present: `docs/architecture/` (system overview, component design, data flow, repository structure), `docs/decisions/` (ADR-0001 to ADR-0010), `docs/database/`, `docs/milestones/`, and `docs/ai_evidence/`.
+Also present: `docs/architecture/` (system overview, component design, data flow, repository structure), `docs/decisions/` (ADR-0001 to ADR-0011), `docs/database/`, `docs/milestones/`, and `docs/ai_evidence/`.
 
 ## Phase 3: Application foundation
 
@@ -76,6 +76,8 @@ Gaps: release from quarantine is not implemented (`QUARANTINED` is terminal for 
 
 Scope: React, TypeScript, Vite, Tailwind, Recharts single-page application with login, overview dashboard, machines, orders, batches, quality, investigations case board, traceability, simulation, and analytics with a SQL explorer; backend analytics endpoints.
 
+Layout since 2026-11-08: the shell is `StatusBand.tsx` above the page and `SoftKeyBar.tsx` below it, in one black theme (ADR-0011). The sidebar and the mobile drawer named in earlier entries below no longer exist.
+
 Present (backend): analytics endpoints for the query catalogue (`QueryCatalogEntry`, 14 entries, 8 runnable), parameterised query execution (`QueryResult`, including query 10 `characteristic_control_chart` with `specification_id`), `GET /specifications` for the control chart picker, paginated alerts, acknowledgement (Operator guard), and the overdue order check. Present (frontend): React 19, TypeScript, Vite 7, Tailwind 4, React Router 7, TanStack Query 5, and Recharts 3 with a screen for each of Login, Overview, Machines, Orders, Batches, Inspections (with the CSV import panel), Traceability, Investigations list, Investigation detail (case board with evidence cards and show-the-SQL), Analytics (charts, the per-characteristic control chart, and the SQL explorer), and Simulation, under `frontend/src/features/*`, with shared UI and chart components, hooks, services, types, and utilities; the list screens read the page envelope of the paginated endpoints.
 
 Status: complete. `pnpm test` ran 25 files and 118 tests, all passing, on 2026-11-07 in this checkout; `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, and `pnpm build` passed in the last recorded run (commit 897fb3e, 2026-11-07). An accessibility pass on 2026-11-07 (commit f62170c) covered focus management, landmark and heading structure, accessible names for repeated row actions, and contrast. Fourteen screenshots of the running screens were captured on 2026-11-07 (docs/media/screenshots).
@@ -110,6 +112,7 @@ Status: in progress. Next steps in order: observe the five workflows on the next
 | Status filters and order status counts | Implemented | `GET /production-batches?status=`, `GET /investigations?status=`, `GET /production-orders/status-counts`, `order_number` on batch rows; `tests/api/test_status_filters_api.py` |
 | Overdue check without a client-supplied date | Implemented | `routes/analytics.py::check_overdue_orders` (no body), locking reads in `alert_service.py`, exit 1 on error in `jobs/check_overdue_orders.py`; `tests/api/test_alert_checks_api.py` |
 | Frontend accessibility pass | Implemented | commit f62170c: `components/ui/States.tsx` (`ErrorNotice`), `Disclosure.tsx`, `app/Sidebar.tsx`, `charts/ChartFrame.tsx`, `features/batches/BatchActions.tsx` |
+| Industrial control panel interface | Implemented | commit 3a6ccad, ADR-0011: `app/StatusBand.tsx`, `app/SoftKeyBar.tsx`, `styles/index.css`, `utils/chartTheme.ts`; `Sidebar.tsx` and `hooks/useMediaQuery.ts` removed |
 | Walkthrough video | In progress | `docs/media/media-plan.md`; `docs/media/videos/` holds no video file |
 
 ## Dependencies between remaining work

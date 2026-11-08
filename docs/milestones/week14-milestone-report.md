@@ -20,7 +20,7 @@ The Week 14 row of docs/milestones/README.md lists eight required artifacts; the
 | Tested README | Complete | README commands executed in this worktree (section 2); the stale statements found during that run were corrected the same day (commit 9e7cd7a). |
 | Demo data | Complete | make reset-demo against database fs_w08 on 2026-11-07; counts in section 2. |
 | Report draft | Complete, student sections pending | This document plus docs/milestones/week12-milestone-report.md and week13-milestone-report.md; the bracketed prompts in sections 4, 6, 8 and 9 of each are for the student. |
-| AI evidence package | Complete, student annotations pending | docs/ai_evidence: README, ai-use-record.md (51 rows), seven conversation records, reflection-notes.md. |
+| AI evidence package | Complete, student annotations pending | docs/ai_evidence: README, ai-use-record.md (52 rows), seven conversation records, reflection-notes.md. |
 | Walkthrough video and screenshot refresh | Complete for the silent clips, narration pending | Fourteen screenshots re-captured on 2026-11-07 (docs/media/screenshots, 1.75 MB), five of them new: CSV import result, control chart, batch status filter, overdue check, throttled login. Videos 2 to 6 recorded as silent 1280 by 800 clips by scripts/development/record_walkthroughs.py and committed under ADR-0010 (docs/media/videos, 10.4 MB). Video 1 (slides) and the narration are the student's recording work. |
 
 Blockers: none that stop the submission. Open risks are the narration of videos 2 to 6 and the slides for video 1, and the first GitHub Actions runs of the Compose Smoke and End-to-End workflows, which happen only when the branch is pushed. [Add any blocker you see, or write "none".]
