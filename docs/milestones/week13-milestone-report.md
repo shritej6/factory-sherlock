@@ -13,10 +13,10 @@ The Week 12 next-step plan listed five items for this milestone. All five are in
 
 | Planned item | Status | Evidence |
 |---|---|---|
-| Usable interface for every module | Complete | Nine sidebar sections in frontend/src/app/nav.ts, each routed in frontend/src/app/router.tsx behind RequireAuth, plus login and the investigation detail route. Screenshots 01 to 09 in docs/media/screenshots. |
+| Usable interface for every module | Complete | Nine soft keys, one per section in frontend/src/app/nav.ts,, each routed in frontend/src/app/router.tsx behind RequireAuth, plus login and the investigation detail route. Screenshots 01 to 09 in docs/media/screenshots. |
 | API contract documented | Complete | docs/api/openapi.json, 35 paths and 44 operations, regenerated at commit c978744; frontend/src/types/api.ts mirrors every schema the interface reads. |
 | Integration tests | Complete | Backend: 481 tests collected by `uv run pytest --collect-only -q` on 2026-11-07, including tests/api/test_status_filters_api.py and tests/api/test_pagination_api.py. Frontend: Vitest 25 files, 118 tests passed the same day. |
-| End-to-end suite | Complete; 9 of 9 passed locally | Playwright, 5 spec files and 9 tests in frontend/e2e; `pnpm test:e2e` passed 9 of 9 on 2026-11-07 at commit 11d5c3a after two sidebar locators were repointed at the renamed landmarks; .github/workflows/e2e.yml runs the same suite against a seeded MySQL 8.4 service. [Record the first green End-to-End run id after the push.] |
+| End-to-end suite | Complete; 9 of 9 passed locally | Playwright, 5 spec files and 9 tests in frontend/e2e; `pnpm test:e2e` passed 9 of 9 on 2026-11-07 at commit 11d5c3a after two navigation locators were repointed at the renamed landmarks; .github/workflows/e2e.yml runs the same suite against a seeded MySQL 8.4 service. [Record the first green End-to-End run id after the push.] |
 | Accessibility pass | Complete | Commit f62170c (skip link, drawer focus, Disclosure focus return, named row actions, heading levels, contrast tokens) with tests in frontend/src/app/AppLayout.test.tsx, frontend/src/components/ui/Disclosure.test.tsx, and frontend/src/features/batches/BatchActions.test.tsx. |
 
 Incomplete or carried into Week 14:
@@ -40,7 +40,7 @@ Blockers: [describe any blocker, or write "none"].
 
 ### Usable interface
 
-Every screen sits behind RequireAuth and the shared AppLayout (skip link, sidebar, main landmark). Role handling follows the backend route guards through frontend/src/utils/permissions.ts: viewers read, operators get shop-floor actions, engineers and administrators get everything else.
+Every screen sits behind RequireAuth and the shared AppLayout (skip link, status band, main landmark, soft-key bar). Role handling follows the backend route guards through frontend/src/utils/permissions.ts: viewers read, operators get shop-floor actions, engineers and administrators get everything else.
 
 | Screen | Components | What it does | Screenshot |
 |---|---|---|---|
@@ -71,13 +71,13 @@ The contract is the generated OpenAPI document. scripts/development/export_opena
 | Layer | Count | What it covers |
 |---|---|---|
 | Backend pytest | 481 tests collected (`uv run pytest --collect-only -q`, 2026-11-07) in 35 files under backend/tests | API routes and role guards, error contract, pagination, status filters and counts, CSV import, overdue alerts, login throttle, body limits, rules R1 to R7, state machines, schema boundaries, foreign keys, list ordering indexes, the SQL catalogue against MySQL |
-| Frontend Vitest | 25 files, 118 tests passed (`pnpm test`, 2026-11-07) | http client (error envelope, network failure, 401, multipart, repeated query keys), permissions, transitions, chart transforms with per-subgroup limits, Pagination clamping, Disclosure and drawer focus, ErrorNotice request id, LoginPage 429 text, role gating and paging on OrdersPage and OverviewPage, AlertsList, ImportInspectionsPanel, TraceabilityPage, SqlExplorer, ControlChartPanel, EvidenceCard, AuthProvider |
+| Frontend Vitest | 25 files, 118 tests passed (`pnpm test`, 2026-11-07) | http client (error envelope, network failure, 401, multipart, repeated query keys), permissions, transitions, chart transforms with per-subgroup limits, Pagination clamping, Disclosure focus, ErrorNotice request id, LoginPage 429 text, role gating and paging on OrdersPage and OverviewPage, AlertsList, ImportInspectionsPanel, TraceabilityPage, SqlExplorer, ControlChartPanel, EvidenceCard, AuthProvider |
 | Playwright | 5 spec files, 9 tests in frontend/e2e | See below |
 | GitHub Actions | 5 workflows: Backend CI, Frontend CI, Docs Lint, Compose Smoke, End-to-End | Compose Smoke and End-to-End were added this milestone |
 
 The Playwright specs drive the real frontend, backend, and MySQL with the seeded demo accounts:
 
-- login.spec.ts (2): a wrong password shows "Invalid username or password" and stays on /login; the engineer lands on the overview and the sidebar lists the nine sections of nav.ts in order.
+- login.spec.ts (2): a wrong password shows "Invalid username or password" and stays on /login; the engineer lands on the overview, the soft keys list the nine sections of nav.ts in order, and the status band shows the user and role.
 - investigation.spec.ts (1): reads the demo day from CNC-03's first batch through the API, opens an investigation through the form, checks the summary names CNC-03 and an elevated defect rate, checks cards R1 to R6 in order, expands the SQL on R1, checks flagged batches, then moves OPEN to IN_REVIEW to CLOSED with a conclusion.
 - traceability.spec.ts (3): forward trace of lot L201 lists batches with unit counts; backward trace of a unit from that lot shows its lot and inspection summary; an engineer quarantines an available lot outside CNC-03 and the chip reads Quarantined after a reload.
 - roles.spec.ts (2): a viewer sees the orders table with no create, edit, or transition controls; a direct POST with the viewer token returns 403 `AuthorizationError` with no SQL in the message.
@@ -95,7 +95,7 @@ frontend/playwright.config.ts starts both servers: `uv run uvicorn app.main:app 
 | Shared ErrorNotice with the request id for every mutation | Keep InlineNotice with a formatted message string | Only ErrorState showed the request id, so a failed form action could not be matched to a server log line. Components now keep the raw error and hand it to ErrorNotice, which renders the same message and id as ErrorState; the CSV import test asserts the id is shown. |
 | End-to-end sign-in through the API, with one form login under tracing off | Type the demo password into the login form in every spec | A Playwright trace records typed values and request bodies and is uploaded with the CI report, so `signIn` in e2e/support/auth.ts obtains a token with Node's `fetch` outside the browser and stores it under the app's `localStorage` key. login.spec.ts still types the password because the form itself is under test, and runs with `test.use({ trace: 'off' })`. |
 | Pagination clamps back to the last page with rows | Show an empty page past the end, or jump to the first page | After a delete or a narrowed filter the offset can run past the total. Pagination.tsx shows `floor((total - 1) / limit) * limit` and requests it from an effect, so the user stays near where they were; screens also reset the offset when a filter changes. |
-| Explicit focus management in the drawer and in Disclosure | Browser default, which drops focus to the document body when the focused element is removed | The mobile drawer precedes the Menu button in DOM order, so focus moves to its first link on open, Escape returns it to Menu, and the aside is `inert` while closed. Disclosure returns focus to its toggle when a form closes itself, and BatchActions moves focus into the reason field and back. Each behaviour has a test. |
+| Explicit focus management in Disclosure and the row actions | Browser default, which drops focus to the document body when the focused element is removed | Disclosure returns focus to its toggle when a form closes itself, and BatchActions moves focus into the reason field and back. Each behaviour has a test. |
 
 Assumptions and constraints: the frontend speaks only to `/api/v1`, through the Vite proxy in development; the demo scenario is dated 2026-11-02, so default windows run 2026-11-01 to 2026-11-05; no screen creates products, machines, or material lots. The e2e suite writes one closed investigation and one quarantined lot per run, and `make reset-demo` restores the demo database.
 

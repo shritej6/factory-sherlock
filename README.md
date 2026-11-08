@@ -48,7 +48,7 @@ The platform is organized into six modules. All six are implemented in the backe
 | Quality management | Inspections against product specifications with automatic pass or fail evaluation, defect classification, quality summaries, and CSV import of up to 5000 measurements in one transaction with row-level error reporting. | `backend/app/services/quality_service.py`, `backend/app/services/inspection_import.py`, `backend/app/domain/quality_rules.py` |
 | Investigation engine | Seven evidence rules (R1 to R7) that compare defect rates, find recurring defects, locate the onset hour, list preceding machine events, flag batches for review, find shared material lots, and confirm the onset with a one-sided CUSUM over hourly defect rates. Each rule stores the SQL it ran and the rows it saw. | `backend/app/investigation` |
 | Traceability | Forward trace from a material lot to the batches, units, and orders it touched; backward trace from a serial number to its lot, machine, and inspections; quarantine of a batch or a whole lot with cascading alerts. | `backend/app/services/traceability_service.py` |
-| Production intelligence dashboard | React application with an overview, machine and order management, inspections with a CSV import panel, traceability search, the investigation case board, a SQL explorer for the analytical queries, a per-characteristic control chart, and a simulation control panel. | `frontend/src` |
+| Production intelligence dashboard | React application with an overview, machine and order management, inspections with a CSV import panel, traceability search, the investigation case board, a SQL explorer for the analytical queries, a per-characteristic control chart, and a simulation control panel. The interface is a black control-panel layout with a status band showing every machine's state and one soft key per section. | `frontend/src` |
 
 Supporting capabilities:
 
@@ -331,9 +331,9 @@ Implemented and verified by automated tests:
 - Deterministic simulation engine with five fault models, machine state tracking, and chunked bulk-insert persistence.
 - Investigation engine with seven rules (R7 is a one-sided CUSUM), stored SQL evidence, and a non-causal summary.
 - Forward and backward traceability and quarantine cascades.
-- Frontend application with login, overview (with the overdue check), machines, orders, batches, inspections with the CSV import panel, traceability, investigations with the case board, analytics with the SQL explorer and the per-characteristic control chart, and simulation pages; paged tables on every list screen; an accessibility pass (labelled landmarks and row actions, focus management for disclosures and inline forms, WCAG 2.1 AA contrast in both themes).
+- Frontend application with login, overview (with the overdue check), machines, orders, batches, inspections with the CSV import panel, traceability, investigations with the case board, analytics with the SQL explorer and the per-characteristic control chart, and simulation pages; paged tables on every list screen; an accessibility pass (labelled landmarks and row actions, focus management for disclosures and inline forms, WCAG 2.1 AA contrast on the single black theme; a status band and a soft-key bar replace the sidebar, [ADR-0011](docs/decisions/ADR-0011-industrial-control-panel-interface.md)).
 - Five CI workflows, nine Playwright browser tests, contribution and security policies, issue and pull request templates.
-- Documentation set, ten architecture decision records, rendered diagrams, milestone documents.
+- Documentation set, eleven architecture decision records, rendered diagrams, milestone documents.
 
 Planned or not yet done:
 

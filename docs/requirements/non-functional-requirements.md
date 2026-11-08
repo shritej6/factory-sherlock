@@ -69,7 +69,7 @@ Known gaps: the reference lists (`GET /products`, `GET /machines`, `GET /materia
 
 ## NFR-6 Accessibility
 
-The frontend is implemented and these requirements apply to it. A code-level accessibility pass on 2026-11-07 computed contrast ratios from the colour tokens in `frontend/src/styles/index.css` and `chartTheme.ts` (every text pair at or above 4.5:1 after the `ink-faint` shade change; chart series at or above 3:1), moved focus into the mobile navigation drawer when it opens and back to the toggle when a disclosure closes, gave repeated row actions accessible names that include the batch number, and added Vitest tests for these behaviours (`AppLayout`, `Disclosure`, `BatchActions`, `States`, `StatTile`). No screen-reader session and no manual walkthrough at 320 px width has been recorded, so NFR-6.5 and the screen-reader part of NFR-6.1 remain unverified.
+The frontend is implemented and these requirements apply to it. A code-level accessibility pass on 2026-11-07 computed contrast ratios from the colour tokens in `frontend/src/styles/index.css` and `chartTheme.ts` (every text pair at or above 4.5:1 after the `ink-faint` shade change; chart series at or above 3:1), moved focus into the mobile navigation drawer when it opens (the drawer was removed on 2026-11-08 with the sidebar, see ADR-0011) and back to the toggle when a disclosure closes, gave repeated row actions accessible names that include the batch number, and added Vitest tests for these behaviours (`AppLayout`, `Disclosure`, `BatchActions`, `States`, `StatTile`). No screen-reader session and no manual walkthrough at 320 px width has been recorded, so NFR-6.5 and the screen-reader part of NFR-6.1 remain unverified.
 
 | ID | Requirement |
 |----|-------------|

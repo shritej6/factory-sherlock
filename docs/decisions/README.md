@@ -18,6 +18,7 @@ Every ADR follows the same sections: Status, Context, Decision, Consequences, Al
 | [ADR-0008](ADR-0008-uv-and-pnpm-toolchains.md) | uv for the Python backend and pnpm for the frontend | Accepted | `backend/pyproject.toml`, `backend/uv.lock`, `frontend/package.json`, `frontend/pnpm-lock.yaml` |
 | [ADR-0009](ADR-0009-cusum-onset-rule.md) | CUSUM onset detection as a seventh rule, not a model | Accepted | `backend/app/investigation/rules.py`, `database/queries/investigation/hourly_defect_rates.sql` |
 | [ADR-0010](ADR-0010-commit-short-walkthrough-videos.md) | Commit short silent walkthrough videos | Accepted | `scripts/development/record_walkthroughs.py`, `docs/media/videos/` |
+| [ADR-0011](ADR-0011-industrial-control-panel-interface.md) | Black industrial control panel interface | Accepted | `frontend/src/styles/index.css`, `frontend/src/app/StatusBand.tsx`, `frontend/src/app/SoftKeyBar.tsx` |
 
 ## Writing a new record
 
