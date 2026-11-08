@@ -20,10 +20,10 @@ The Week 14 row of docs/milestones/README.md lists eight required artifacts; the
 | Tested README | Complete | README commands executed in this worktree (section 2); the stale statements found during that run were corrected the same day (commit 9e7cd7a). |
 | Demo data | Complete | make reset-demo against database fs_w08 on 2026-11-07; counts in section 2. |
 | Report draft | Complete, student sections pending | This document plus docs/milestones/week12-milestone-report.md and week13-milestone-report.md; the bracketed prompts in sections 4, 6, 8 and 9 of each are for the student. |
-| AI evidence package | Complete, student annotations pending | docs/ai_evidence: README, ai-use-record.md (50 rows), seven conversation records, reflection-notes.md. |
-| Walkthrough video and screenshot refresh | In progress | docs/media/videos/README.md lists six videos, all Pending; the nine screenshots are dated 2026-11-03 and predate pagination, the control chart, the import panel, and the overdue check. No new files exist in this worktree. |
+| AI evidence package | Complete, student annotations pending | docs/ai_evidence: README, ai-use-record.md (51 rows), seven conversation records, reflection-notes.md. |
+| Walkthrough video and screenshot refresh | Complete for the silent clips, narration pending | Fourteen screenshots re-captured on 2026-11-07 (docs/media/screenshots, 1.75 MB), five of them new: CSV import result, control chart, batch status filter, overdue check, throttled login. Videos 2 to 6 recorded as silent 1280 by 800 clips by scripts/development/record_walkthroughs.py and committed under ADR-0010 (docs/media/videos, 10.4 MB). Video 1 (slides) and the narration are the student's recording work. |
 
-Blockers: none that stop the submission. Open risks are the recording time for the video and the first GitHub Actions runs of the Compose Smoke and End-to-End workflows, which happen only when the branch is pushed. [Add any blocker you see, or write "none".]
+Blockers: none that stop the submission. Open risks are the narration of videos 2 to 6 and the slides for video 1, and the first GitHub Actions runs of the Compose Smoke and End-to-End workflows, which happen only when the branch is pushed. [Add any blocker you see, or write "none".]
 
 ## 2. Required technical artifacts and repository commit or tag
 
@@ -125,7 +125,7 @@ docs/ai_evidence holds README.md (tools, verification approach, honesty rules), 
 | Decision | Alternatives considered | Rationale |
 |---|---|---|
 | Release scope: the functional unique index on open ORDER_OVERDUE alerts was probed and not added | CREATE UNIQUE INDEX over CASE WHEN alert_type = 'ORDER_OVERDUE' AND acknowledged_at IS NULL THEN production_order_id END; MySQL 8.4.0 accepted it on a scratch database and rejected a second open alert with error 1062 | The locking read in alert_service already serialises concurrent checks and is covered by a two-session test; the index would also require the service to treat 1062 on that key as "already raised". Recorded as a follow-up |
-| Videos hosted externally, not in Git LFS | Git LFS for MP4 files | docs/media/media-plan.md keeps large media out of the repository and links recordings from docs/media/videos/README.md; LFS would add a dependency to every clone |
+| Short silent walkthrough clips committed as plain files (ADR-0010) | Keep every video external, as the 2026-11-03 media plan said; Git LFS for MP4 files | The five clips are 1.5 to 3.4 MB each (10.4 MB together), under the 10 MB per file and 40 MB total ceiling the ADR sets; a file in the clone opens for any grader while an external link can expire. The narrated versions and video 1 stay external. LFS would add a dependency to every clone |
 | No refresh tokens or revocation | Refresh endpoint plus a revocation list | SECURITY.md and ADR-0007 record the limitation: tokens expire after JWT_ACCESS_TOKEN_MINUTES, and get_current_user reloads the row so a deactivated user is rejected on the next request |
 | MySQL default sql_mode written out in full, with ONLY_FULL_GROUP_BY | Leave the local server on its inherited mode, which had the flag off | CI runs mysql:8.4 with the default mode, so a query that only works with the flag off would pass locally and fail in CI. All 14 catalogue queries and the API and integration tests were run with the flag forced on before local_mysql.sh and docker-compose.yml were changed |
 | The overdue check stays unscheduled | A cron entry or a scheduler thread in the API process | Scheduling is deployment configuration for a project that runs locally. The job is idempotent and reachable from make check-overdue and POST /analytics/alerts/checks/overdue-orders; docs/architecture/repository-structure.md states that nothing in the repository schedules it |
@@ -163,7 +163,7 @@ From the submission checklist in docs/milestones/README.md:
 2. Confirm the first GitHub Actions runs of all five workflows and record the run ids in docs/testing/test-matrix.md. [date]
 3. Correct the stale README.md statements listed in section 2; rebuild the DOCX and PDF for Weeks 12, 13, and 14 with build_documents.py and check the page counts it prints. [date]
 4. Replace every bracketed prompt in the three reports and in the six conversation records under docs/ai_evidence/conversations. [date]
-5. Refresh the nine screenshots with scripts/development/capture_screenshots.py against make reset-demo; record the walkthrough video and add its link to docs/media/videos/README.md. [date]
+5. Record the narration for videos 2 to 6 over the committed silent clips, prepare the slides for video 1, and add the links for the narrated versions to docs/media/videos/README.md. [date]
 6. Upload Week14_Milestone_Report.pdf to Canvas before the scheduled lab defense; a repository commit does not replace the Canvas submission. [date]
 7. During the defense, open the Canvas artifact and the repository; be ready to show make reset-demo, an investigation on CNC-03, the control chart with stepped limits, and the 429 and 422 error paths. [date]
 

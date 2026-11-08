@@ -244,6 +244,8 @@ Other useful targets (run `make help` for the full list):
 | `make lint` | Ruff, mypy, ESLint, and TypeScript checks |
 | `make check-docs` | Fail if any Markdown file contains an em dash, en dash, or emoji |
 | `make check-overdue` | Raise `ORDER_OVERDUE` alerts for open orders past their due date; exits 0 after committing and 1 after rolling back on an error |
+| `make screenshots` | Re-capture the fourteen screenshots in `docs/media/screenshots` from the running application |
+| `make videos` | Record the silent walkthrough clips into `docs/media/videos` (writes to the database; reset the demo scenario first) |
 | `make benchmark-sim` | Time simulation persistence for the demo shape and a large shape, rolled back |
 
 ## Testing and quality gates
@@ -316,7 +318,7 @@ The full OpenAPI document (35 paths, 44 operations) is exported to [docs/api/ope
 
 ## Screenshots and video
 
-Only genuine captures of the running application are committed. The plan for which screens to capture and what the walkthrough video will show is in [docs/media/media-plan.md](docs/media/media-plan.md). Nine screenshots captured on 2026-11-03 with `scripts/development/capture_screenshots.py` (Playwright driving Chrome against the running application and the demo scenario) are stored in `docs/media/screenshots` and listed in that plan. No video has been recorded yet.
+Only genuine captures of the running application are committed. The plan for which screens to capture and what the walkthrough video will show is in [docs/media/media-plan.md](docs/media/media-plan.md). Fourteen screenshots captured on 2026-11-07 with `scripts/development/capture_screenshots.py` (`make screenshots`; Playwright driving Chrome against the running application and the demo scenario) are stored in `docs/media/screenshots` and listed in that plan. Videos 2 to 6 exist as silent screen recordings made by `scripts/development/record_walkthroughs.py` (`make videos`) and committed in `docs/media/videos` under [ADR-0010](docs/decisions/ADR-0010-commit-short-walkthrough-videos.md); the narrated versions and video 1 (project overview) have not been recorded.
 
 ## Implementation status
 
@@ -331,11 +333,11 @@ Implemented and verified by automated tests:
 - Forward and backward traceability and quarantine cascades.
 - Frontend application with login, overview (with the overdue check), machines, orders, batches, inspections with the CSV import panel, traceability, investigations with the case board, analytics with the SQL explorer and the per-characteristic control chart, and simulation pages; paged tables on every list screen; an accessibility pass (labelled landmarks and row actions, focus management for disclosures and inline forms, WCAG 2.1 AA contrast in both themes).
 - Five CI workflows, nine Playwright browser tests, contribution and security policies, issue and pull request templates.
-- Documentation set, nine architecture decision records, rendered diagrams, milestone documents.
+- Documentation set, ten architecture decision records, rendered diagrams, milestone documents.
 
 Planned or not yet done:
 
-- A walkthrough video (see the media plan).
+- Narration for the five silent walkthrough clips and video 1, the project overview (see the media plan).
 - Observing the Compose Smoke and End-to-End workflows green on GitHub and recording their run ids in `docs/testing/test-matrix.md`.
 - Deployment to any hosted environment; the project is designed to run locally.
 
@@ -343,7 +345,7 @@ Planned or not yet done:
 
 The items listed in the Week 10 report (pagination, CSV import, overdue order alerts, per-characteristic control charts, a CUSUM onset rule) were implemented on 2026-11-07; the per-item record is in [docs/development/development-roadmap.md](docs/development/development-roadmap.md). Remaining:
 
-1. Record the walkthrough video for the course submission.
+1. Record the narration for the walkthrough videos and the project overview video for the course submission.
 2. Observe the Compose Smoke and End-to-End workflows on the next push and record the outcome in `docs/testing/test-matrix.md`.
 3. Release from quarantine and the `CONSUMED` lot status (Phase 7 gaps in the roadmap document).
 4. Schedule `make check-overdue`; nothing in the repository runs it on a timer.

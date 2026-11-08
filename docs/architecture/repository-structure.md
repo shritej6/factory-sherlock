@@ -244,6 +244,7 @@ factory-sherlock/
 |   |   |-- ADR-0007-jwt-roles-and-least-privilege-db-user.md
 |   |   |-- ADR-0008-uv-and-pnpm-toolchains.md
 |   |   |-- ADR-0009-cusum-onset-rule.md
+|   |   |-- ADR-0010-commit-short-walkthrough-videos.md
 |   |   `-- README.md
 |   |-- development/
 |   |   |-- coding-standards.md
@@ -280,8 +281,18 @@ factory-sherlock/
 |   |   |   |-- 07-traceability-and-quarantine.png
 |   |   |   |-- 08-analytics-charts.png
 |   |   |   |-- 09-analytics-sql-explorer.png
+|   |   |   |-- 10-quality-csv-import.png
+|   |   |   |-- 11-analytics-control-chart.png
+|   |   |   |-- 12-batches-status-filter.png
+|   |   |   |-- 13-overview-overdue-check.png
+|   |   |   |-- 14-login-throttled.png
 |   |   |   `-- README.md
 |   |   |-- videos/
+|   |   |   |-- 02-virtual-factory-demonstration.mp4
+|   |   |   |-- 03-quality-inspection-demonstration.mp4
+|   |   |   |-- 04-defect-investigation-demonstration.mp4
+|   |   |   |-- 05-material-traceability-demonstration.mp4
+|   |   |   |-- 06-complete-system-walkthrough.mp4
 |   |   |   `-- README.md
 |   |   `-- media-plan.md
 |   |-- milestones/
@@ -482,6 +493,7 @@ factory-sherlock/
 |   |   |-- export_openapi.py
 |   |   |-- export_schema.sh
 |   |   |-- local_mysql.sh
+|   |   |-- record_walkthroughs.py
 |   |   |-- render_diagrams.py
 |   |   |-- render_milestone_figures.py
 |   |   `-- reset_database.py
@@ -511,7 +523,7 @@ factory-sherlock/
 | `CONTRIBUTING.md` | Branch naming, Conventional Commits, quality gates, pull request process | Implemented |
 | `docker-compose.yml` | Optional `mysql:8.4` service with `utf8mb4`, strict SQL mode, a `mysql-data` volume, a health check, and `scripts/setup/init_databases.sh` mounted as `/docker-entrypoint-initdb.d/01_init.sh` with `MYSQL_ROOT_ARGS` and `MYSQL_CLIENT_ARGS` set for the entrypoint's socket-only server | Written; executed only by the `compose-smoke.yml` workflow in CI (Docker is not installed on the development machine) |
 | `LICENSE` | MIT | Implemented |
-| `Makefile` | Wraps the development commands: `db-init`, `db-start`, `db-stop`, `migrate`, `seed`, `seed-demo`, `reset-demo`, `check-overdue`, `backend`, `frontend`, `test-backend`, `test-frontend`, `benchmark-sim`, `lint`, `format`, `export-schema`, `export-openapi`, `render-diagrams`, `render-figures`, `check-docs` | Implemented |
+| `Makefile` | Wraps the development commands: `db-init`, `db-start`, `db-stop`, `migrate`, `seed`, `seed-demo`, `reset-demo`, `check-overdue`, `backend`, `frontend`, `test-backend`, `test-frontend`, `benchmark-sim`, `lint`, `format`, `export-schema`, `export-openapi`, `render-diagrams`, `render-figures`, `screenshots`, `videos`, `check-docs` | Implemented |
 | `README.md` | Project entry point for the repository | Implemented |
 | `SECURITY.md` | Reporting policy and known limitations; contact address placeholder to be filled by the owner | Implemented |
 
@@ -1064,7 +1076,8 @@ Query semantics and sample results are documented in `docs/database/queries.md`.
 | `development/benchmark_simulation.py` | Times `simulation_service.run_simulation` for two request shapes (the demo shape, 3 machines by 12 batches by 20 units, and a large shape, 3 by 40 by 50), three repeats each, inside sessions that are rolled back; prints the median total time, the engine-only time, and rows per second (units plus inspections) (`make benchmark-sim`, which runs `uv run python ../scripts/development/benchmark_simulation.py` from `backend/`) | `.env`, a migrated and seeded database | Exits 2 when `APP_ENV` is `production` | Implemented (leaves no rows behind; InnoDB auto-increment counters still advance) |
 | `development/render_diagrams.py` | Renders every `docs/media/diagrams/*.mmd` to an SVG next to it using Playwright and the Mermaid library from a CDN (`make render-diagrams`, which runs `uv run --group docs python ../scripts/development/render_diagrams.py` from `backend/`) | `.mmd` files | exits non-zero on a render failure | Implemented (requires the `docs` dependency group, an installed Google Chrome, and network access for the Mermaid CDN script) |
 | `development/render_milestone_figures.py` | Renders each Mermaid block in `docs/milestones/*.md` to `docs/milestones/figures/<document>-<n>.png` (numbered by block order) with Playwright at device scale 4; reuses the browser launch and Mermaid page from `render_diagrams.py`, and `docs/milestones/build_documents.py` imports it (`make render-figures`, which runs `uv run --group docs python ../scripts/development/render_milestone_figures.py` from `backend/`) | `docs/milestones/*.md` | Prints each failed figure to stderr, continues, and exits 1 if any failed or no browser could be launched | Implemented (requires the `docs` dependency group and network access for the Mermaid CDN script) |
-| `development/capture_screenshots.py` | Drives Chrome (the macOS Google Chrome install when present, otherwise Playwright's Chromium) through Playwright against the running frontend at `http://localhost:5173` (`FRONTEND_URL` overrides), signs in as the demo `engineer` account with `SEED_DEMO_PASSWORD` read from the repository `.env`, and writes `01-login.png` to `09-analytics-sql-explorer.png` into `docs/media/screenshots/` (`SCREENSHOT_DIR` overrides) at a 1600 by 1000 viewport. Needs the demo scenario loaded (`make reset-demo`), both servers running, and at least one investigation | `.env`, running servers | Exits 1 with a message when no investigation exists or `SEED_DEMO_PASSWORD` is missing; a screen that fails to load raises a Playwright error rather than writing a placeholder | Implemented (run on 2026-11-03; there is no Makefile target) |
+| `development/capture_screenshots.py` | Drives Chrome (the macOS Google Chrome install when present, otherwise Playwright's Chromium) through Playwright against the running frontend at `http://localhost:5173` (`FRONTEND_URL` overrides), signs in as the demo `engineer` account with `SEED_DEMO_PASSWORD` read from the repository `.env`, and writes `01-login.png` to `14-login-throttled.png` into `docs/media/screenshots/` (`SCREENSHOT_DIR` overrides) at a 1600 by 1000 viewport, flagging any PNG over 300 KB in its output. Needs the demo scenario loaded (`make reset-demo`), both servers running, one investigation, batch `SIM0001-CNC-02-02-B04` started, and the sample CSV not yet imported; the last capture deliberately throttles the `viewer` account | `.env`, running servers | Exits 1 with a message when no investigation exists or `SEED_DEMO_PASSWORD` is missing; a screen that fails to load raises a Playwright error rather than writing a placeholder | Implemented (`make screenshots`; run on 2026-11-07) |
+| `development/record_walkthroughs.py` | Records videos 2 to 6 of the media plan as silent screen captures: one Playwright browser context per video at 1280 by 800 with `record_video_dir`, signed in by storing an API token under the `factory-sherlock.token` localStorage key so no password appears on camera, then converted to H.264 MP4 with ffmpeg (crf 28, falling back to 30 and 15 fps if a clip exceeds 10 MB) and the WebM intermediate deleted. `FRONTEND_URL`, `VIDEO_DIR`, and `VIDEOS` (default `2,3,4,5,6`) override the defaults. The sequences write orders, batches, inspections, simulation runs, investigations, and quarantines, so the demo scenario must be reset before a second run | `.env`, running servers, `ffmpeg` and `ffprobe` on PATH | Exits 1 when `SEED_DEMO_PASSWORD`, a login, or a required record is missing; warns on stderr when a clip stays over 10 MB after every encoding option; a step that fails raises a Playwright error | Implemented (`make videos`; run on 2026-11-07) |
 
 ## frontend/
 
@@ -1099,10 +1112,10 @@ Build artifacts such as `tsconfig.*.tsbuildinfo` may appear after `pnpm build`, 
 | Path | Owner and contents | Status |
 |------|--------------------|--------|
 | `docs/architecture/` | This document set: system overview, component design, data flow, repository structure | Implemented |
-| `docs/decisions/` | ADR-0001 to ADR-0009 and an index | Implemented |
+| `docs/decisions/` | ADR-0001 to ADR-0010 and an index | Implemented |
 | `docs/media/diagrams/` | Mermaid sources: `system-architecture.mmd`, `backend-components.mmd`, `local-deployment.mmd` (architecture documentation), `er-diagram.mmd` (database documentation), and `manufacturing-workflow.mmd`, `investigation-workflow.mmd`, `traceability-relationships.mmd`, `simulation-event-flow.mmd`, plus one `<name>.svg` render per source produced by `make render-diagrams` | Implemented |
-| `docs/media/screenshots/` | `README.md` plus nine PNG files (`01-login.png` to `09-analytics-sql-explorer.png`) captured on 2026-11-03 by `scripts/development/capture_screenshots.py` | Implemented |
-| `docs/media/videos/` | Only a `README.md`; no video exists | Planned |
+| `docs/media/screenshots/` | `README.md` plus fourteen PNG files (`01-login.png` to `14-login-throttled.png`, 1.75 MB in total) captured on 2026-11-07 by `scripts/development/capture_screenshots.py` | Implemented |
+| `docs/media/videos/` | `README.md` plus five silent H.264 clips for videos 2 to 6 (`02-virtual-factory-demonstration.mp4` to `06-complete-system-walkthrough.mp4`, 10.4 MB in total) recorded on 2026-11-07 by `scripts/development/record_walkthroughs.py` and committed under ADR-0010; video 1 and the narrated versions are pending | Implemented for the silent clips |
 | `docs/api/openapi.json` | OpenAPI 3 document generated by `scripts/development/export_openapi.py`, 35 paths and 44 operations | Implemented |
 | `docs/database/` | Database design, data dictionary, normalization, queries, seed data (owned separately) | Implemented by its owner |
 | `docs/simulation/` | Simulation design and fault models (owned separately) | Implemented by its owner |
