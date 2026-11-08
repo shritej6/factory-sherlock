@@ -1,6 +1,6 @@
 # Screenshots
 
-Fourteen screenshots of the running application, captured on 2026-11-07 at a 1600 by 1000 viewport, light colour scheme, against the demo scenario plus the preparation steps listed in [../media-plan.md](../media-plan.md) (one open investigation, one overdue check, batch `SIM0001-CNC-02-02-B04` started, the sample CSV imported). Captures 1 to 13 are signed in as `engineer`; capture 14 uses `viewer`. The per-item intended content and status are in the media plan.
+Fourteen screenshots of the running application, captured on 2026-11-08 at a 1600 by 1000 viewport, dark colour scheme (the black industrial control panel: a status band with the live machine states and a clock across the top, a row of soft keys as the primary navigation along the bottom), against the demo scenario plus the preparation steps listed in [../media-plan.md](../media-plan.md) (one open investigation, one overdue check, batch `SIM0001-CNC-02-02-B04` started, the sample CSV imported). Captures 1 to 13 are signed in as `engineer`; capture 14 uses `viewer`. The per-item intended content and status are in the media plan.
 
 | File | Screen | What it shows |
 |------|--------|---------------|

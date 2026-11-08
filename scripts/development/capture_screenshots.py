@@ -36,6 +36,7 @@ SAMPLE_CSV = REPO_ROOT / "database" / "seeds" / "sample_inspection_import.csv"
 SIZE_LIMIT_BYTES = 300 * 1024
 WRONG_PASSWORD = "not-the-demo-password"
 MAX_LOGIN_ATTEMPTS = 7
+SOFT_KEY_ROW_HEIGHT = 48  # the primary navigation is pinned to the bottom edge
 
 
 def _demo_password() -> str:
@@ -125,7 +126,7 @@ def _capture_analytics(page: Page) -> None:
     page.wait_for_load_state("networkidle")
     rows = page.locator("section[aria-label='SQL explorer'] tbody tr")
     rows.last.evaluate("node => node.scrollIntoView({block: 'end'})")
-    page.evaluate("window.scrollBy(0, 24)")
+    page.evaluate(f"window.scrollBy(0, {SOFT_KEY_ROW_HEIGHT + 24})")
     _shot(page, "09-analytics-sql-explorer.png")
 
 
@@ -171,7 +172,7 @@ def _capture_overdue_check(page: Page) -> None:
 
 def _capture_login_throttled(browser: Browser) -> None:
     """Fresh context, wrong viewer password until the server answers 429. Run this last."""
-    page = browser.new_page(viewport=VIEWPORT, color_scheme="light")
+    page = browser.new_page(viewport=VIEWPORT, color_scheme="dark")
     page.goto(f"{FRONTEND_URL}/login")
     login_response = re.compile(r"/api/v1/auth/login$")
     for _ in range(MAX_LOGIN_ATTEMPTS):
@@ -192,7 +193,7 @@ def main() -> int:
     password = _demo_password()
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(executable_path=_chrome_path())
-        page = browser.new_page(viewport=VIEWPORT, color_scheme="light")
+        page = browser.new_page(viewport=VIEWPORT, color_scheme="dark")
         _login(page, password)
         _capture_core_screens(page)
         if not _capture_investigation(page):

@@ -163,7 +163,7 @@ class Walk:
 def _sign_in(browser: Browser, token: str, record_dir: Path) -> Page:
     context = browser.new_context(
         viewport=SIZE,
-        color_scheme="light",
+        color_scheme="dark",
         record_video_dir=str(record_dir),
         record_video_size=SIZE,
     )
