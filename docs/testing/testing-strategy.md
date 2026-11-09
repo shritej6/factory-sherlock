@@ -146,7 +146,7 @@ The numbers are specific to the development machine and a local MySQL; a network
 
 ## Known gaps
 
-- The Playwright suite passed locally on 2026-11-07, but no End-to-End or Compose Smoke workflow run had been observed when this document was written; the first run ids are to be recorded here. The suite leaves data in the demo database and does not cover machine status changes, batch creation and completion, manual or CSV inspection entry, simulation runs, the overdue check, or alert acknowledgement in the browser.
+- The Playwright suite passed locally on 2026-11-07 and in the End-to-End workflow on 2026-11-08 (run 42568859641, with Compose Smoke run 42568859629 on the same push; all five run ids are in test-matrix.md). The suite leaves data in the demo database and does not cover machine status changes, batch creation and completion, manual or CSV inspection entry, simulation runs, the overdue check, or alert acknowledgement in the browser.
 - No test stops MySQL; the 503 path is produced by pointing the session factory at a closed port, which raises the same `OperationalError` 2003. Pool exhaustion is simulated with a constructed `TimeoutError`, not observed.
 - The login throttle is per process. Behaviour with several uvicorn workers (each allowing `LOGIN_MAX_FAILURES` attempts) is documented in SECURITY.md and not tested.
 - No response-time or throughput test exists for API endpoints. The two benchmark scripts are run by hand and their figures are recorded in documents, not asserted. EXPLAIN plans and index use are documented in `docs/database/database-design.md` and `docs/database/queries.md` and not asserted by a test.
