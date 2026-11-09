@@ -5,7 +5,7 @@
 **Project:** Factory Sherlock: Manufacturing Simulation, Quality Control, and Defect Investigation on MySQL
 **Date:** [submission date]
 **Repository:** https://github.com/shritej6/factory-sherlock
-**Commit or tag:** [commit hash after push]. The release candidate tag is planned as v1.0.0-rc1 on the commit that merges feature/completion-integration.
+**Commit or tag:** branch feature/completion-integration, pushed 2026-11-08; the first green runs of all five workflows are on commit 0de489b (section 2). The release candidate tag is planned as v1.0.0-rc1 on the commit that merges feature/completion-integration.
 
 ## 1. Completion status, incomplete items, and blockers
 
@@ -23,7 +23,7 @@ The Week 14 row of docs/milestones/README.md lists eight required artifacts; the
 | AI evidence package | Complete, student annotations pending | docs/ai_evidence: README, ai-use-record.md (52 rows), seven conversation records, reflection-notes.md. |
 | Walkthrough video and screenshot refresh | Complete for the silent clips, narration pending | Fourteen screenshots (docs/media/screenshots, 1.36 MB), five of them new on 2026-11-07: CSV import result, control chart, batch status filter, overdue check, throttled login; all fourteen re-captured on 2026-11-08 after the interface redesign (ADR-0011). Videos 2 to 6 recorded as silent 1280 by 800 clips by scripts/development/record_walkthroughs.py and committed under ADR-0010 (docs/media/videos, 10.2 MB, re-recorded 2026-11-08). Video 1 (slides) and the narration are the student's recording work. |
 
-Blockers: none that stop the submission. Open risks are the narration of videos 2 to 6 and the slides for video 1, and the first GitHub Actions runs of the Compose Smoke and End-to-End workflows, which happen only when the branch is pushed. [Add any blocker you see, or write "none".]
+Blockers: none that stop the submission. Open risks are the narration of videos 2 to 6 and the slides for video 1. The first GitHub Actions runs of all five workflows, including Compose Smoke and End-to-End, passed on 2026-11-08 (section 2). [Add any blocker you see, or write "none".]
 
 ## 2. Required technical artifacts and repository commit or tag
 
@@ -31,13 +31,13 @@ Blockers: none that stop the submission. Open risks are the narration of videos 
 
 Branch feature/completion-integration, head c978744 (chore: regenerate schema and OpenAPI exports). The merge commits name each feature and the six fix merges of the final wave (0ffdf3e, ae949eb, 758b4e6, 5fcdebf, 9325d87, 582c360).
 
-| Workflow | File | Checks |
-|---|---|---|
-| Backend CI | backend-ci.yml | Against a mysql:8.4 service: init_databases.sh, alembic upgrade head, ruff check, ruff format --check, mypy app, pytest with coverage |
-| Frontend CI | frontend-ci.yml | pnpm install --frozen-lockfile, eslint, prettier check, tsc on three tsconfigs, vitest, vite build |
-| Docs Lint | docs-lint.yml | Fails on em dashes, en dashes, or emoji in Markdown; renders every .mmd diagram with mermaid-cli (allowed to fail) |
-| Compose Smoke | compose-smoke.yml | Starts mysql from docker-compose.yml, checks both schemas and the least-privilege grants as root, connects as the application user over TCP, confirms mysql.user is denied |
-| End-to-End | e2e.yml | Migrates and seeds a mysql:8.4 service with the demo scenario, installs Chromium, runs the Playwright suite (backend port 8013, Vite port 5183) |
+| Workflow | File | Checks | First run on the pushed branch (2026-11-08) |
+|---|---|---|---|
+| Backend CI | backend-ci.yml | Against a mysql:8.4 service: init_databases.sh, alembic upgrade head, ruff check, ruff format --check, mypy app, pytest with coverage | Passed, run 42568859627 |
+| Frontend CI | frontend-ci.yml | pnpm install --frozen-lockfile, eslint, prettier check, tsc on three tsconfigs, vitest, vite build | Passed, run 42568859552 |
+| Docs Lint | docs-lint.yml | Fails on em dashes, en dashes, or emoji in Markdown; renders every .mmd diagram with mermaid-cli (allowed to fail) | Passed, run 42568859579 |
+| Compose Smoke | compose-smoke.yml | Starts mysql from docker-compose.yml, checks both schemas and the least-privilege grants as root, connects as the application user over TCP, confirms mysql.user is denied | Passed, run 42568859629 |
+| End-to-End | e2e.yml | Migrates and seeds a mysql:8.4 service with the demo scenario, installs Chromium, runs the Playwright suite (backend port 8013, Vite port 5183) | Passed, run 42568859641 |
 
 Every gate runs locally from the Makefile: make lint (ruff check, ruff format --check, mypy, eslint, tsc), make test-backend (pytest against the <MYSQL_DATABASE>_test schema), make test-frontend, make check-docs, make migrate, make reset-demo, make export-schema, make export-openapi; the browser suite is pnpm test:e2e in frontend/. Observed in this worktree on 2026-11-07: make lint printed "All checks passed!", "122 files already formatted", and "Success: no issues found in 80 source files", with eslint and tsc clean; make check-docs passed; make test-backend against fs_w08_test printed "481 passed, 1 warning in 222.18s". The Playwright suite passed 9 of 9 locally on 2026-11-07 at commit 11d5c3a (`pnpm test:e2e`, 4.9 s); the End-to-End workflow runs the same suite in CI.
 
@@ -160,7 +160,7 @@ Tool: Claude Code (Anthropic). During the final wave it drafted the fixes, tests
 From the submission checklist in docs/milestones/README.md:
 
 1. Merge feature/completion-integration to main, push, tag v1.0.0-rc1, and record the hash in the header of this report and of the Week 12 and 13 reports. [date]
-2. Confirm the first GitHub Actions runs of all five workflows and record the run ids in docs/testing/test-matrix.md. [date]
+2. Confirm the first GitHub Actions runs of all five workflows and record the run ids in docs/testing/test-matrix.md. Done 2026-11-08 (section 2).
 3. Correct the stale README.md statements listed in section 2; rebuild the DOCX and PDF for Weeks 12, 13, and 14 with build_documents.py and check the page counts it prints. [date]
 4. Replace every bracketed prompt in the three reports and in the six conversation records under docs/ai_evidence/conversations. [date]
 5. Record the narration for videos 2 to 6 over the committed silent clips, prepare the slides for video 1, and add the links for the narrated versions to docs/media/videos/README.md. [date]

@@ -278,7 +278,7 @@ What the backend suite covers:
 - CHECK, UNIQUE, ENUM, and foreign key enforcement, the list-ordering indexes, and all fourteen SQL files against simulated data (integration).
 - Frontend components and hooks with Vitest and Testing Library; the demo workflows end to end with Playwright.
 
-Continuous integration runs the same checks in GitHub Actions with a MySQL service container. The workflows are in `.github/workflows`. Backend CI, Frontend CI, and Docs Lint ran green on the first push on 2026-11-04 (run ids in `docs/development/development-roadmap.md`); Compose Smoke and End-to-End were added on 2026-11-07 and run on the next push.
+Continuous integration runs the same checks in GitHub Actions with a MySQL service container. The workflows are in `.github/workflows`. Backend CI, Frontend CI, and Docs Lint ran green on the first push on 2026-11-04 (run ids in `docs/development/development-roadmap.md`); Compose Smoke and End-to-End were added on 2026-11-07, and all five workflows ran green on the first push of the integration branch on 2026-11-08 (run ids in `docs/testing/test-matrix.md`).
 
 ## API overview
 
@@ -338,7 +338,6 @@ Implemented and verified by automated tests:
 Planned or not yet done:
 
 - Narration for the five silent walkthrough clips and video 1, the project overview (see the media plan).
-- Observing the Compose Smoke and End-to-End workflows green on GitHub and recording their run ids in `docs/testing/test-matrix.md`.
 - Deployment to any hosted environment; the project is designed to run locally.
 
 ## Roadmap
